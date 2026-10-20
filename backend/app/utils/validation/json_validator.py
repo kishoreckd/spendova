@@ -4,6 +4,7 @@ The filename is retained for compatibility with the reference project, though
 this module formats responses rather than validating request JSON.
 """
 
+from collections.abc import Mapping
 from typing import Any, Generic, Literal, TypeVar
 
 from fastapi.encoders import jsonable_encoder
@@ -29,7 +30,7 @@ class JsonResponse:
         message: str,
         data: Any = None,
         status_code: int = 200,
-        headers: dict[str, str] | None = None,
+        headers: Mapping[str, str] | None = None,
     ) -> JSONResponse:
         body = ApiResponse[Any](status=response_status, message=message, data=data)
         return JSONResponse(
@@ -39,7 +40,7 @@ class JsonResponse:
         )
 
     @classmethod
-    def success(cls, message: str, data: Any = None, status_code: int = 200, headers: dict[str, str] | None = None) -> dict[str, Any]:
+    def success(cls, message: str, data: Any = None, status_code: int = 200, headers: Mapping[str, str] | None = None) -> dict[str, Any]:
         """Return data for FastAPI to validate against the route response model.
 
         Success status codes belong on the route decorator. Keeping validation
@@ -51,11 +52,11 @@ class JsonResponse:
         return {"status": "success", "message": message, "data": data}
 
     @classmethod
-    def error(cls, message: str, data: Any = None, status_code: int = 400, headers: dict[str, str] | None = None) -> JSONResponse:
+    def error(cls, message: str, data: Any = None, status_code: int = 400, headers: Mapping[str, str] | None = None) -> JSONResponse:
         return cls.create("error", message, data, status_code, headers=headers)
 
     @classmethod
-    def validation_error(cls, error: ValidationError, status_code: int = 422, headers: dict[str, str] | None = None) -> JSONResponse:
+    def validation_error(cls, error: ValidationError, status_code: int = 422, headers: Mapping[str, str] | None = None) -> JSONResponse:
         errors = [
             {
                 "field": " -> ".join(str(part) for part in item["loc"]),

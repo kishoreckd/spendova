@@ -8,13 +8,15 @@ from ..utils.validation.json_validator import JsonResponse
 logger = logging.getLogger(__name__)
 
 
-async def http_exception_handler(_: Request, exc: HTTPException):
+async def http_exception_handler(_: Request, exc: Exception):
+    assert isinstance(exc, HTTPException)
     message = exc.detail if isinstance(exc.detail, str) else "Request failed"
     details = None if isinstance(exc.detail, str) else exc.detail
     return JsonResponse.error(message, details, exc.status_code, exc.headers)
 
 
-async def request_validation_exception_handler(_: Request, exc: RequestValidationError):
+async def request_validation_exception_handler(_: Request, exc: Exception):
+    assert isinstance(exc, RequestValidationError)
     details = [
         {
             "field": " -> ".join(str(part) for part in item["loc"]),

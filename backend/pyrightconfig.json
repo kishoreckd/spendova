@@ -1,0 +1,8 @@
+{
+  "include": ["app", "tests"],
+  "exclude": [".venv", "migrations"],
+  "venvPath": ".",
+  "venv": ".venv",
+  "typeCheckingMode": "standard",
+  "reportMissingTypeStubs": false
+}

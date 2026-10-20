@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
@@ -46,8 +47,9 @@ def budget_status(budget_id: str, user: CurrentUser = Depends(get_current_user),
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Budget not found")
     start = budget.month
     end = date(start.year + (start.month == 12), 1 if start.month == 12 else start.month + 1, 1)
-    spent = db.scalar(select(func.coalesce(func.sum(Transaction.amount), 0)).where(
+    spent_value = db.scalar(select(func.coalesce(func.sum(Transaction.amount), 0)).where(
         Transaction.user_id == user.id, Transaction.kind == "expense", Transaction.status == "cleared",
         Transaction.occurred_on >= start, Transaction.occurred_on < end,
     ))
+    spent = Decimal(spent_value or 0)
     return JsonResponse.success("Budget status retrieved", {"budget_id": budget.id, "limit": budget.total_limit, "spent": spent, "remaining": budget.total_limit - spent})

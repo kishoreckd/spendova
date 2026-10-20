@@ -31,11 +31,14 @@ def get_dashboard(
         Transaction.occurred_on < end,
         Transaction.status == "cleared",
     )
-    totals = dict(db.execute(
+    total_rows = db.execute(
         select(Transaction.kind, func.coalesce(func.sum(Transaction.amount), 0))
         .where(*period_filter)
         .group_by(Transaction.kind)
-    ).all())
+    ).tuples()
+    totals: dict[str, Decimal] = {
+        kind: Decimal(amount) for kind, amount in total_rows
+    }
     income = Decimal(totals.get("income", 0))
     spending = Decimal(totals.get("expense", 0))
     category_rows = db.execute(

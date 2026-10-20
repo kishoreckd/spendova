@@ -6,10 +6,11 @@ Updated: 20 October 2026 (Asia/Kolkata)
 
 - Repository: `https://github.com/kishoreckd/spendova.git`.
 - Default branch: `main`; first verified full-project commit: `61b2990`.
-- GitHub Actions runs frontend lint/build and backend migrations/tests.
+- GitHub Actions runs frontend lint/build and backend migrations/tests/type checks.
 - Secrets, local databases, environments, dependencies, and build output are ignored.
 - Frontend production build passes.
 - Backend clean Alembic upgrade passes; 12 tests pass with one dependency warning.
+- Pyright checks all backend application and test modules with 0 errors/warnings.
 - Oxlint has no errors and three non-blocking shadcn Fast Refresh warnings.
 
 ## Backend

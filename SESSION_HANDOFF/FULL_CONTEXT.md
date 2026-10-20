@@ -520,3 +520,7 @@ On 20 October 2026:
 - Future asset purchase dates are rejected in both the browser and backend.
 - Search-icon overlap was corrected, and the receipt scanner was removed from
   current navigation and transaction entry.
+- Backend static analysis is configured in `backend/pyrightconfig.json` and CI.
+  SQLAlchemy result typing, a nullable budget aggregate, response-header types,
+  and exception-handler signatures were corrected. Pyright reports 0 errors and
+  0 warnings across `app/` and `tests/`.
