@@ -6,5 +6,3 @@ psycopg[binary]==3.2.6
 alembic==1.15.2
 google-auth==2.40.1
 requests==2.32.3
-pytest==8.3.5
-httpx==0.28.1

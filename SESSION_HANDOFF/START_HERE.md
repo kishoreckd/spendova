@@ -31,7 +31,7 @@ insights. It uses the finalized Spendova midnight/aqua brand.
 React/Vite frontend (Vercel)
             |
             v
-FastAPI backend (Google Cloud Run)
+FastAPI backend (Railway)
             |
             v
 Supabase hosted PostgreSQL

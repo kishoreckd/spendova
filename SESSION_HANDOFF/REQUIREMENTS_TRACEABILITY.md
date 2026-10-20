@@ -23,4 +23,4 @@
 | PostgreSQL database | Connected through Supabase | `backend/app/database.py` |
 | Schema migrations | Three Alembic migrations at head | `backend/migrations/` |
 | Frontend deployment | Planned for Vercel, not deployed | `SESSION_HANDOFF/FULL_CONTEXT.md` |
-| Backend deployment | Planned for Cloud Run, not deployed | `backend/Dockerfile` |
+| Backend deployment | Railway-ready Docker image; not deployed | `backend/Dockerfile`, `backend/README.md` |

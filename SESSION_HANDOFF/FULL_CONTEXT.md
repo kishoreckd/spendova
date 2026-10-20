@@ -324,8 +324,8 @@ Implemented migrations:
 - `20261020_0004_email_verification.py`
 - `20261020_0005_user_ownership.py`
 
-The connected database was observed at `20261020_0004`; repository migration
-head is `20261020_0005`. Apply the latest migration before deployment.
+The connected database and repository migration head are both
+`20261020_0005`. Railway must retain `alembic upgrade head` as a pre-deploy step.
 
 Backend tests currently pass: 12 tests when executed from `backend/`.
 
@@ -376,11 +376,13 @@ Vercel
   framework: Vite
   build: npm run build
   output: dist
-  VITE_API_URL: Cloud Run API URL + /api/v1
+  VITE_API_URL: Railway API URL + /api/v1
 
-Google Cloud Run
+Railway
   backend root: backend/
   builds backend/Dockerfile
+  pre-deploy: alembic upgrade head
+  healthcheck: /health
   secrets/environment configured outside Git
 
 Supabase
@@ -394,10 +396,12 @@ Vercel can deploy only `frontend/` from the monorepo by setting the Root
 Directory. React Router requires an SPA rewrite to `index.html`; add or verify
 `frontend/vercel.json` before deployment.
 
-Cloud Run has an appropriate free allowance for a low-traffic personal API and
-can scale to zero. Google Cloud SQL is not a comparable permanent free database.
-Firestore has a free tier but is not recommended for this relational finance
-model. Keep Supabase PostgreSQL unless cost or requirements change materially.
+Railway is the selected Python hosting platform. The monorepo remains the source
+of truth: Railway uses `/backend`, while Vercel uses `frontend`. Separate
+repositories were considered but rejected because deployments can remain
+independent without losing atomic full-stack changes. Firestore is not
+recommended for this relational finance model. Keep Supabase PostgreSQL unless
+cost or requirements change materially.
 
 ## 13. Environment-variable policy
 
@@ -464,7 +468,7 @@ Rules:
 ### Production gaps
 
 - Configure branch protection and required CI checks.
-- Cloud Run deployment.
+- Railway deployment.
 - Vercel deployment.
 - Firebase production settings.
 - Rate limiting, structured request IDs, monitoring, backups, and restore drill.
@@ -524,3 +528,8 @@ On 20 October 2026:
   SQLAlchemy result typing, a nullable budget aggregate, response-header types,
   and exception-handler signatures were corrected. Pyright reports 0 errors and
   0 warnings across `app/` and `tests/`.
+- The Supabase database was upgraded to Alembic revision `20261020_0005`.
+- Railway deployment support was added to the backend Dockerfile: migrations
+  are included in the image and Uvicorn binds to Railway's injected `PORT`.
+- The monorepo deployment layout was retained. Railway must use `/backend`, and
+  Vercel must use `frontend`; `frontend/vercel.json` supplies SPA rewrites.

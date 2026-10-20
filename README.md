@@ -5,6 +5,18 @@
 
 Spendova is now an executable mobile-first personal finance application with a React/shadcn frontend and FastAPI foundation.
 
+## Repository and deployment layout
+
+Spendova intentionally uses one repository with independently deployable apps:
+
+- `frontend/` — React/Vite application for Vercel or Firebase Hosting.
+- `backend/` — FastAPI service for Railway.
+
+In Railway, connect `kishoreckd/spendova` and set the service **Root Directory**
+to `/backend`. In Vercel, connect the same repository and set **Root Directory**
+to `frontend`. This keeps changes atomic while allowing each platform to build
+and deploy only the application it owns.
+
 ## Run the application
 
 ```powershell

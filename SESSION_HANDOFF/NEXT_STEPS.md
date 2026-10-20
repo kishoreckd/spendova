@@ -5,7 +5,7 @@ Updated: 20 October 2026 (Asia/Kolkata)
 ## 1. Database release
 
 - Rotate any database password that appeared in chat.
-- Run `alembic upgrade head` with the deployment secret and confirm `20261020_0005`.
+- Connected Supabase is at `20261020_0005`; retain `alembic upgrade head` as the Railway pre-deploy command.
 - Test cross-user isolation for every financial endpoint.
 
 ## 2. End-to-end verification
@@ -33,10 +33,12 @@ Updated: 20 October 2026 (Asia/Kolkata)
 
 ## 5. Deployment
 
-- Deploy FastAPI to Cloud Run with Secret Manager and `AUTH_REQUIRED=true`.
+- Connect `kishoreckd/spendova` to Railway, set Root Directory to `/backend`,
+  configure the documented variables, and set `AUTH_REQUIRED=true`.
+- Configure Railway pre-deploy command `alembic upgrade head` and healthcheck `/health`.
 - Configure exact production CORS origins.
 - Deploy Vite to Vercel with root directory `frontend`.
-- Set `VITE_API_URL` to the Cloud Run `/api/v1` endpoint.
+- Set `VITE_API_URL` to the Railway `/api/v1` endpoint.
 - Add production domains to Firebase and run migrations as an explicit release step.
 
 ## 6. Release hardening

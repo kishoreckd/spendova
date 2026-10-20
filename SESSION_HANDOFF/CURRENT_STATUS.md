@@ -15,7 +15,7 @@ Updated: 20 October 2026 (Asia/Kolkata)
 
 ## Backend
 
-FastAPI `0.5.0`, SQLAlchemy 2, Psycopg 3, PostgreSQL, and Alembic. Alembic is
+FastAPI application version `0.6.0`, SQLAlchemy 2, Psycopg 3, PostgreSQL, and Alembic. Alembic is
 the only production schema authority.
 
 Implemented:
@@ -29,11 +29,11 @@ Implemented:
 
 Database state:
 
-- Connected Supabase was confirmed at revision `20261020_0004` on 20 October 2026.
-- Code head is `20261020_0005`.
+- Connected Supabase was upgraded to revision `20261020_0005` on 20 October 2026.
+- Code and database head are both `20261020_0005`.
 - Migration `0005` adds foreign-key ownership constraints from user-scoped
   financial tables to `users.id` with cascading cleanup.
-- Run `alembic upgrade head` before deploying this version.
+- Railway must run `alembic upgrade head` as its pre-deploy command on every release.
 
 ## Frontend
 
@@ -63,6 +63,8 @@ Important behavior:
 
 - Firebase project `spendova-a6d20` has Google, web app, and Analytics configured.
 - Supabase PostgreSQL remains the database.
-- Cloud Run backend and Vercel frontend deployment are not completed.
+- The monorepo is retained: Railway uses root `/backend`; Vercel uses root `frontend`.
+- The Railway-ready Docker image builds successfully and listens on injected `PORT`.
+- Railway backend and Vercel frontend deployment are not completed.
 - Production requires `AUTH_REQUIRED=true`, managed secrets, exact CORS origins,
   Firebase authorized domains, and SMTP delivery.

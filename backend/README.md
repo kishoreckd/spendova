@@ -1,72 +1,75 @@
-# Spendova API
+# Spendova Backend
 
-FastAPI backend for Spendova's accounts, categories, double-entry transactions,
-savings goals and contributions, owned assets, budgets, recurring money, and
-dashboard analytics.
+Production FastAPI API for Spendova. It provides Firebase-authenticated user
+profiles, accounts, categories, ledger-backed transactions, budgets, goals,
+recurring money, owned assets, and dashboard analytics.
 
-## Local setup
+## Local development
 
 ```powershell
-cd backend
 py -3.12 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 Copy-Item .env.example .env
 .\.venv\Scripts\python.exe -m alembic upgrade head
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
 ```
 
-Open `http://127.0.0.1:8000/docs`. The React app expects the API base URL
-`http://localhost:8000/api/v1` by default.
+The health endpoint is `http://localhost:8000/health`; API documentation is
+available at `http://localhost:8000/docs` outside production.
+
+## Railway deployment
+
+Connect the `kishoreckd/spendova` repository to a Railway service, set its Root
+Directory to `/backend`, and use the checked-in Dockerfile.
+
+Configure the service deployment settings as follows:
+
+```text
+Pre-deploy command: alembic upgrade head
+Healthcheck path: /health
+Healthcheck timeout: 120 seconds
+Restart policy: On Failure (maximum 5 retries)
+```
+
+The Docker image starts Uvicorn on Railway's injected `PORT`. The pre-deploy
+command applies schema migrations before Railway sends traffic to the release.
+
+Configure these Railway variables (never commit their values):
+
+```text
+ENVIRONMENT=production
+DATABASE_URL=postgresql+psycopg://...
+CORS_ORIGINS=https://your-frontend-domain.example
+AUTH_REQUIRED=true
+FIREBASE_PROJECT_ID=your-firebase-project-id
+OTP_SECRET=a-long-random-production-secret
+EMAIL_DELIVERY_MODE=smtp
+EMAIL_FROM=Spendova <no-reply@your-domain.example>
+SMTP_HOST=...
+SMTP_PORT=587
+SMTP_USERNAME=...
+SMTP_PASSWORD=...
+SMTP_USE_TLS=true
+```
+
+Use the Supabase session pooler URL when Railway cannot reach the direct IPv6
+database endpoint. Generate a public Railway domain after the first successful
+deployment and use its `/api/v1` URL as the frontend's `VITE_API_URL`.
 
 ## Authentication
 
-Development defaults to `AUTH_REQUIRED=false`. Requests use
-`local-development-user`, or a test identity supplied with `X-User-Id`.
+In production, the frontend sends a Firebase ID token using
+`Authorization: Bearer <token>`. `POST /api/v1/auth/google` creates or updates
+the local PostgreSQL profile after a valid Google sign-in. Password/email signup
+uses Firebase plus the backend verification flow.
 
-Production must set `AUTH_REQUIRED=true` and `FIREBASE_PROJECT_ID`. The frontend
-sends its Firebase ID token using `Authorization: Bearer <token>`. Never send a
-database password or Gemini API key to the browser.
-
-Authentication endpoints:
-
-- `POST /api/v1/auth/google` — creates a profile on first Google sign-in and
-  returns the existing profile on later logins.
-- `GET /api/v1/auth/me` — returns the authenticated profile.
-- `PATCH /api/v1/auth/me` — updates locale, currency, country, timezone, and
-  onboarding state.
-- `POST /api/v1/auth/logout` — completes the backend logout contract; the
-  frontend must also call Firebase `signOut` and discard its token.
-
-## Supabase PostgreSQL
-
-Copy the appropriate connection string from Supabase's **Connect** panel into
-`backend/.env` as `DATABASE_URL`, using the `postgresql+psycopg` scheme. Prefer
-the session pooler URL where IPv6 is unavailable. Then run:
-
-```powershell
-.\.venv\Scripts\python.exe -m alembic upgrade head
-```
-
-The password belongs only in `.env` or the deployment platform's secret store.
-
-## Quality checks
+## Verification
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\pyright.exe --pythonpath .\.venv\Scripts\python.exe app tests
 .\.venv\Scripts\python.exe -m compileall -q app
 ```
 
-Production schema changes must use Alembic. `create_all` runs only for local
-development and tests.
-
-## Implemented API areas
-
-- `/api/v1/auth` — Google sign-in, current profile, preferences, and logout.
-- `/api/v1/accounts` — account creation, listing, and archival.
-- `/api/v1/categories` — defaults plus user-defined categories.
-- `/api/v1/transactions` — filtered ledger-backed transactions and voiding.
-- `/api/v1/goals` — savings goals and contribution history.
-- `/api/v1/assets` — owned assets, age, and cost-per-day.
-- `/api/v1/budgets` — monthly/category limits and live status.
-- `/api/v1/recurring-rules` — salary, subscriptions, bills, and other schedules.
-- `/api/v1/dashboard` — month/year cash-flow and category summaries.
+Production schema changes must use Alembic. Do not use SQLAlchemy `create_all`
+as a production migration mechanism.
