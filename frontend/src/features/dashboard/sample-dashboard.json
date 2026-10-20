@@ -1,0 +1,81 @@
+{
+  "currency": "INR",
+  "periodLabel": "September 2026",
+  "income": 92000,
+  "spending": 47320,
+  "cashFlow": 44680,
+  "transactionCount": 28,
+  "categories": [
+    { "name": "Housing", "amount": 18000 },
+    { "name": "Groceries", "amount": 7840 },
+    { "name": "Transport", "amount": 6350 },
+    { "name": "Entertainment", "amount": 3240 },
+    { "name": "Utilities", "amount": 2890 },
+    { "name": "Healthcare", "amount": 1750 }
+  ],
+  "transactions": [
+    {
+      "id": "sample-1",
+      "merchant": "Fresh Market",
+      "detail": "Groceries · Today, 6:42 PM",
+      "amount": -1840
+    },
+    {
+      "id": "sample-2",
+      "merchant": "Monthly salary",
+      "detail": "Salary · Today, 9:00 AM",
+      "amount": 92000
+    },
+    {
+      "id": "sample-3",
+      "merchant": "Bharat Petroleum",
+      "detail": "Transport · Yesterday",
+      "amount": -3200
+    },
+    {
+      "id": "sample-4",
+      "merchant": "Netflix",
+      "detail": "Entertainment · 28 Sep",
+      "amount": -649
+    },
+    {
+      "id": "sample-5",
+      "merchant": "Home rent",
+      "detail": "Housing · 27 Sep",
+      "amount": -18000
+    }
+  ],
+  "trend": [
+    { "month": "Apr", "income": 92000, "spending": 51500 },
+    { "month": "May", "income": 92000, "spending": 64200 },
+    { "month": "Jun", "income": 97000, "spending": 58800 },
+    { "month": "Jul", "income": 92000, "spending": 70400 },
+    { "month": "Aug", "income": 92000, "spending": 55560 },
+    { "month": "Sep", "income": 92000, "spending": 47320 }
+  ],
+  "budgets": [
+    { "name": "Housing", "spent": 18000, "limit": 22000 },
+    { "name": "Groceries", "spent": 7840, "limit": 10000 },
+    { "name": "Transport", "spent": 6350, "limit": 8000 },
+    { "name": "Entertainment", "spent": 3240, "limit": 5000 }
+  ],
+  "accounts": [
+    { "name": "HDFC Savings", "type": "Bank account", "balance": 146800 },
+    { "name": "ICICI Credit", "type": "Credit card", "balance": -28400 },
+    { "name": "Cash wallet", "type": "Cash", "balance": 4200 }
+  ],
+  "goals": [
+    {
+      "name": "New car",
+      "saved": 280000,
+      "target": 900000,
+      "monthlyRequired": 20000
+    },
+    {
+      "name": "Emergency fund",
+      "saved": 180000,
+      "target": 300000,
+      "monthlyRequired": 10000
+    }
+  ]
+}
