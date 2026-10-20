@@ -132,8 +132,10 @@ may be considered later but must not distort the current data model or UI.
 - FastAPI verifies the token and scopes every private query to the token user ID.
 - Development currently allows a local identity header when `AUTH_REQUIRED` is
   false. Production must set `AUTH_REQUIRED=true`.
-- Firebase is not yet integrated into the React UI and real project configuration
-  remains outstanding.
+- Firebase is integrated into React for Google and email/password authentication.
+- Google identities are already verified by Firebase and do not enter the custom
+  email-code screen. Email/password sign-up uses the FastAPI verification-code flow.
+- Google profile name, email, UID, and photo URL are synchronized to PostgreSQL.
 
 ## 4. Naming and brand history
 
@@ -319,10 +321,13 @@ Implemented migrations:
 - `20261018_0001_initial_core.py`
 - `20261018_0002_users.py`
 - `20261020_0003_planning.py`
+- `20261020_0004_email_verification.py`
+- `20261020_0005_user_ownership.py`
 
-Current database revision is `20261020_0004 (head)`.
+The connected database was observed at `20261020_0004`; repository migration
+head is `20261020_0005`. Apply the latest migration before deployment.
 
-Backend tests currently pass: 11 tests when executed from `backend/`.
+Backend tests currently pass: 12 tests when executed from `backend/`.
 
 ## 10. Database decision and connection history
 
@@ -429,12 +434,13 @@ Rules:
 - Firebase email/password screens and the backend six-digit email verification
   flow are implemented. Firebase Email/Password must be enabled in the console,
   and SMTP must be configured before codes are delivered to real inboxes.
-- Most frontend pages still render mock data.
-- The main authenticated dashboard is now API-backed, while `/demo` presents a
-  clearly labeled public sample dashboard before signup.
+- Authenticated dashboard, transactions, accounts, assets, categories, budgets,
+  goals, recurring commitments, and report calculations are API-backed.
+- `/demo` is the only intended sample-data experience.
 - A shared authenticated fetch client exists; React Query integration is still
   pending.
-- Frontend loading/error/empty states are not consistently backed by real APIs.
+- Edit CRUD is incomplete for several resources, and loading/error behavior still
+  needs automated browser coverage.
 
 ### Backend domain gaps
 
@@ -445,7 +451,7 @@ Rules:
 - Recurring occurrence worker/materialization.
 - Rich target-date purchase scenarios.
 - Notification/outbox processing.
-- User export and deletion.
+- Server-side large export and account deletion. A client-side data export exists.
 - Audit-event persistence.
 
 ### OCR/AI gaps
@@ -457,8 +463,7 @@ Rules:
 
 ### Production gaps
 
-- Git repository initialization/reconnection.
-- CI workflows.
+- Configure branch protection and required CI checks.
 - Cloud Run deployment.
 - Vercel deployment.
 - Firebase production settings.
@@ -490,6 +495,28 @@ At the start of a new session:
 5. Run backend tests from `backend/`.
 6. Run frontend `npm run check`.
 7. Confirm Alembic revision without printing the database URL.
-8. Begin with Firebase and the shared frontend API layer unless the user changes
-   priority.
+8. Apply migration 0005, verify real browser workflows, and follow NEXT_STEPS.md
+   unless the user changes priority.
 9. Update this handoff after material implementation changes.
+
+## 17. Latest implementation and repository history
+
+On 20 October 2026:
+
+- The monorepo was initialized and pushed to
+  `https://github.com/kishoreckd/spendova.git` on `main`.
+- Commit `61b2990` is the first verified full-project snapshot.
+- GitHub Actions CI was added for frontend lint/build and backend migrations/tests.
+- A secret/staged-file audit confirmed local environment files, databases,
+  dependencies, and build output were not committed.
+- Assets and Accounts were migrated from `localStorage` to authenticated FastAPI
+  endpoints and PostgreSQL tables.
+- Migration `20261020_0005_user_ownership.py` added user foreign keys.
+- Categories received a visual Lucide icon picker and UUID/name display was fixed.
+- Reports were replaced with decision-oriented cash-flow, category, and daily
+  spending analytics using cleared transactions; transfers are excluded.
+- Asset calculation is purchase price divided by actual days owned. The page was
+  redesigned to prioritize this daily value with compact, responsive summaries.
+- Future asset purchase dates are rejected in both the browser and backend.
+- Search-icon overlap was corrected, and the receipt scanner was removed from
+  current navigation and transaction entry.

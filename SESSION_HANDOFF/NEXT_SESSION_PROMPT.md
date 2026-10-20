@@ -10,13 +10,16 @@ First read every file in SESSION_HANDOFF/, especially FULL_CONTEXT.md, then read
 ENGINEERING_STANDARDS.md, FINANCIAL_RULES.md, and the relevant implementation
 plan before changing code.
 
-Current state: FastAPI 0.5.0 is connected to Supabase PostgreSQL and Alembic is
-at 20261020_0003 head. Backend tests pass (11) when run from backend/. The React
-frontend builds and is mobile-responsive, but most screens still use mock data.
+Current state: FastAPI 0.5.0 is connected to Supabase PostgreSQL. The connected
+database was last observed at migration 20261020_0004 and repository head is
+20261020_0005. Backend tests pass (12), and frontend lint/build pass. Firebase
+Google and email/password authentication are integrated. Dashboard,
+transactions, accounts, assets, categories, planning data, and reports use the
+authenticated API; sample data is isolated to the public /demo page.
 
-Priority: integrate Firebase Google authentication and create the shared typed,
-authenticated React Query API layer, then replace mocks in the order documented
-in SESSION_HANDOFF/NEXT_STEPS.md.
+Priority: apply migration 0005, run real end-to-end browser verification, then
+complete edit CRUD, ledger-derived balances, notification persistence, and
+Cloud Run/Vercel deployment as ordered in SESSION_HANDOFF/NEXT_STEPS.md.
 
 Never read aloud, print, commit, or expose backend/.env. Preserve the monorepo,
 shadcn-based UI, mobile-first behavior, per-user database isolation, exact

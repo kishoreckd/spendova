@@ -1,109 +1,67 @@
 # Current Implementation Status
 
+Updated: 20 October 2026 (Asia/Kolkata)
+
+## Repository and verification
+
+- Repository: `https://github.com/kishoreckd/spendova.git`.
+- Default branch: `main`; first verified full-project commit: `61b2990`.
+- GitHub Actions runs frontend lint/build and backend migrations/tests.
+- Secrets, local databases, environments, dependencies, and build output are ignored.
+- Frontend production build passes.
+- Backend clean Alembic upgrade passes; 12 tests pass with one dependency warning.
+- Oxlint has no errors and three non-blocking shadcn Fast Refresh warnings.
+
 ## Backend
 
-FastAPI version: `0.5.0`.
+FastAPI `0.5.0`, SQLAlchemy 2, Psycopg 3, PostgreSQL, and Alembic. Alembic is
+the only production schema authority.
 
-Implemented API areas:
+Implemented:
 
-- Firebase Google-token verification boundary and local development identity.
-- Google sign-up/login profile persistence, current profile, updates, logout.
-- Accounts: create, list, archive.
-- Categories: eight seeded defaults plus custom categories and archival.
-- Transactions: list/filter, balanced postings, idempotency, voiding.
-- Goals: creation, listing, deletion, contributions, recalculation.
-- Assets: manual ownership records, age, purchase cost per day, archival.
-- Budgets: monthly totals, category allocations, live remaining amount.
-- Recurring rules: salary, income, bills, subscriptions, transfers.
-- Dashboard: month/year income, spending, cash flow, category totals.
+- Firebase identity verification and Google/email user synchronization.
+- Six-digit email verification with expiry, throttling, attempt limits, and hashes.
+- User profile, onboarding, photo, locale, currency, and timezone.
+- Accounts, categories, transactions and balanced ledger postings.
+- Goals/contributions, assets, budgets, recurring rules, and dashboard aggregation.
+- Transaction idempotency and consistent JSON response envelopes.
 
-Database and migrations:
+Database state:
 
-- SQLAlchemy 2 and Psycopg 3.
-- Alembic is the migration source of truth.
-- Supabase PostgreSQL connection is working.
-- Current database revision: `20261020_0004 (head)`.
-- GitHub/Supabase native migration integration was intentionally not installed;
-  it expects `supabase/migrations`, which would duplicate Alembic ownership.
-
-Verification:
-
-- Backend tests pass when run from `backend/`: 11 passed.
-- One non-blocking Starlette/AnyIO deprecation warning remains.
-- Running pytest from the repository root currently fails imports; run it from
-  `backend/` or add root-level test configuration later.
+- Connected Supabase was confirmed at revision `20261020_0004` on 20 October 2026.
+- Code head is `20261020_0005`.
+- Migration `0005` adds foreign-key ownership constraints from user-scoped
+  financial tables to `users.id` with cascading cleanup.
+- Run `alembic upgrade head` before deploying this version.
 
 ## Frontend
 
-Implemented as React 19, TypeScript, Vite, Tailwind CSS, shadcn-derived UI,
-React Router, React Query dependency, and Recharts.
+React 19, TypeScript, Vite, Tailwind, shadcn-derived Base UI, React Router,
+Firebase, date-fns, Lucide, and Recharts.
 
-Pages exist for:
+Implemented:
 
-- Sign-in and onboarding.
-- Dashboard.
-- Transactions.
-- Planning and purchase-goal calculations.
-- Reports.
-- Accounts/cards.
-- Assets.
-- Categories.
-- Receipt scanning UI.
-- Profile, settings, and more navigation.
+- Responsive authentication, verification, onboarding, protected routes, profile pictures.
+- Public sample dashboard at `/demo`; authenticated screens do not insert samples.
+- Database-backed dashboard, transactions, accounts, assets, categories,
+  budgets, goals, and recurring commitments.
+- Visual category icon picker with 22 Lucide options.
+- Reports with 3/6/12-month cash flow, category share, daily spending, average,
+  peak day, comparisons, net cash flow, and savings rate.
+- Asset UX centered on original amount, exact age, days used, and cost per day.
+- Settings, data export, security, sign-out, responsive navigation, and dark mode.
 
-Mobile work completed:
+Important behavior:
 
-- Desktop sidebar and mobile bottom navigation.
-- Mobile-safe 44px controls.
-- iOS safe-area support.
-- Dynamic viewport-height sheets/dialogs.
-- Narrow-form collapse below 400px.
-- Responsive charts and headings.
-- Reduced-motion support and accessible navigation labels.
-- Light/dark brand assets.
+- Assets and Accounts previously used `localStorage`; both now use authenticated APIs.
+- Browser-only records are not automatically copied and may need re-entry once.
+- Receipt scanning was removed from current scope/navigation.
+- Notification toggles persist locally; scheduled delivery needs a backend worker.
 
-Frontend verification:
+## Services and deployment
 
-- `npm run check` passes formatting, TypeScript, and production build.
-- Oxlint reports three pre-existing shadcn Fast Refresh warnings only.
-
-Integration status:
-
-- Firebase Google sign-in, persistent auth state, protected routes, and logout
-  are implemented.
-- Email/password sign-in and sign-up use Firebase, followed by a FastAPI
-  six-digit email-verification flow with expiry, resend throttling, attempt
-  limiting, HMAC-hashed codes, and backend enforcement for financial routes.
-- The authenticated API client attaches fresh Firebase ID tokens to FastAPI
-  requests.
-- Google sign-in creates or updates the PostgreSQL user using the verified UID,
-  email, display name, and Google profile photo.
-- Onboarding persists region/currency, first account, optional recurring monthly
-  income, and completion status.
-- Firebase Analytics is initialized only for production builds and currently
-  records a privacy-safe login/onboarding event without financial values or PII.
-- Transaction creation uses the authenticated API helper.
-- The authenticated dashboard now loads the signed-in user's totals, category
-  spending, and recent transactions from FastAPI; its former static dataset is
-  available only through the public `/demo` preview.
-- Most screens still use mock/static data.
-- React Query integration and broader typed API coverage are not complete.
-
-## Infrastructure and repository
-
-- Supabase PostgreSQL: connected and migrated.
-- Firebase project `spendova-a6d20`: Google provider, web app, and Analytics
-  configured. Local frontend/backend environment variables are present.
-- Cloud Run backend deployment: not completed.
-- Vercel frontend deployment: not completed.
-- The local folder is currently not initialized as a Git repository; `git
-  status` reports that no `.git` directory exists.
-- Intended GitHub repository name shown by the user: `kishoreckd/spendova`.
-
-## Google database decision
-
-Google Cloud Run has a useful free tier for FastAPI, but Google Cloud SQL does
-not provide a comparable permanent free PostgreSQL database for this design.
-Firestore has a free tier, but replacing PostgreSQL would weaken relational
-reporting, constraints, ledger consistency, and migrations. Keep Supabase
-PostgreSQL for the MVP and host FastAPI on Cloud Run.
+- Firebase project `spendova-a6d20` has Google, web app, and Analytics configured.
+- Supabase PostgreSQL remains the database.
+- Cloud Run backend and Vercel frontend deployment are not completed.
+- Production requires `AUTH_REQUIRED=true`, managed secrets, exact CORS origins,
+  Firebase authorized domains, and SMTP delivery.

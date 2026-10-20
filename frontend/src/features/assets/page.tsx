@@ -2,11 +2,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { intervalToDuration } from "date-fns";
 import {
   Car,
+  CircleDollarSign,
+  Clock3,
   Laptop,
   MoreHorizontal,
   Package,
   Plus,
   Smartphone,
+  Sparkles,
   Trash2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -66,23 +69,33 @@ export default function AssetInventoryPage() {
   const [type, setType] = useState<AssetType>("phone");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [today] = useState(() => new Date().toISOString().slice(0, 10));
   const load = useCallback(
     () =>
       listAssets()
-        .then(setAssets)
+        .then((records) => {
+          setAssets(records);
+          setError("");
+        })
         .catch((reason) =>
           setError(
             reason instanceof Error ? reason.message : "Could not load assets",
           ),
-        ),
+        )
+        .finally(() => setLoading(false)),
     [],
   );
   useEffect(() => {
     void load();
   }, [load]);
+
   const total = useMemo(
     () => assets.reduce((sum, item) => sum + Number(item.purchase_price), 0),
+    [assets],
+  );
+  const combinedDailyCost = useMemo(
+    () => assets.reduce((sum, item) => sum + Number(item.cost_per_day), 0),
     [assets],
   );
 
@@ -110,18 +123,23 @@ export default function AssetInventoryPage() {
   }
 
   async function remove(id: string) {
-    await archiveAsset(id);
-    await load();
+    try {
+      await archiveAsset(id);
+      await load();
+    } catch (reason) {
+      setError(
+        reason instanceof Error ? reason.message : "Could not remove asset",
+      );
+    }
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h2 className="text-xl font-semibold">My assets</h2>
           <p className="text-sm text-muted-foreground">
-            Keep a simple record of products you own. Related costs stay in
-            Expenses.
+            See how your purchase cost reduces across every day of use.
           </p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
@@ -133,8 +151,8 @@ export default function AssetInventoryPage() {
             <DialogHeader>
               <DialogTitle>Add an asset</DialogTitle>
               <DialogDescription>
-                Record the product and its original price. Subscriptions and
-                repairs remain expenses.
+                Record the product and original price. Subscriptions, insurance,
+                and repairs remain expenses.
               </DialogDescription>
             </DialogHeader>
             <form action={submit} className="space-y-4">
@@ -209,20 +227,27 @@ export default function AssetInventoryPage() {
           </DialogContent>
         </Dialog>
       </div>
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Summary label="Assets recorded" value={String(assets.length)} />
-        <Summary label="Original purchase value" value={money(total)} />
-        <Summary
-          label="Oldest asset"
-          value={
-            assets.length
-              ? [...assets].sort((a, b) =>
-                  a.purchased_on.localeCompare(b.purchased_on),
-                )[0].name
-              : "—"
-          }
-        />
-      </div>
+
+      <Card className="overflow-hidden border-primary/15 bg-gradient-to-br from-primary/[0.07] via-card to-card">
+        <CardContent className="grid p-0 sm:grid-cols-3">
+          <Summary
+            icon={Package}
+            label="Assets owned"
+            value={String(assets.length)}
+          />
+          <Summary
+            icon={CircleDollarSign}
+            label="Original amount spent"
+            value={money(total)}
+          />
+          <Summary
+            icon={Clock3}
+            label="Combined cost per day"
+            value={money(combinedDailyCost, 2)}
+          />
+        </CardContent>
+      </Card>
+
       {error && !open && (
         <p
           role="alert"
@@ -231,76 +256,102 @@ export default function AssetInventoryPage() {
           {error}
         </p>
       )}
-      {assets.length ? (
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {assets.map((asset) => {
-            const assetType = (
-              asset.asset_type in iconMap ? asset.asset_type : "other"
-            ) as AssetType;
-            const Icon = iconMap[assetType];
-            return (
-              <Card
-                key={asset.id}
-                className="transition hover:border-primary/40 hover:shadow-md"
-              >
-                <CardContent className="p-5">
-                  <div className="flex items-start justify-between">
-                    <div className="grid size-11 place-items-center rounded-2xl bg-secondary">
-                      <Icon className="text-primary" />
-                    </div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger
-                        render={<Button size="icon" variant="ghost" />}
-                      >
-                        <MoreHorizontal />
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          variant="destructive"
-                          onClick={() => void remove(asset.id)}
-                        >
-                          <Trash2 />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                  <h3 className="mt-4 text-lg font-semibold">{asset.name}</h3>
-                  <div className="mt-1 flex items-center gap-2">
-                    <Badge variant="secondary" className="capitalize">
-                      {asset.asset_type}
-                    </Badge>
-                    <span className="text-sm text-muted-foreground">
-                      {formatAge(asset.purchased_on)}
-                    </span>
-                  </div>
-                  <dl className="mt-5 space-y-2 text-sm">
-                    <Row
-                      label="Purchase price"
-                      value={money(Number(asset.purchase_price))}
-                    />
-                    <Row
-                      label="Purchased"
-                      value={new Date(
-                        `${asset.purchased_on}T00:00:00`,
-                      ).toLocaleDateString("en-IN", { dateStyle: "medium" })}
-                    />
-                    <Row label="Days used" value={`${asset.age_days} days`} />
-                    <Row
-                      label="Cost per day"
-                      value={money(Number(asset.cost_per_day), 2)}
-                    />
-                  </dl>
-                  {asset.notes && (
-                    <p className="mt-4 rounded-xl bg-muted p-3 text-sm text-muted-foreground">
-                      {asset.notes}
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })}
+      {loading ? (
+        <div className="grid gap-5 lg:grid-cols-2">
+          {[0, 1].map((item) => (
+            <div
+              key={item}
+              className="h-72 animate-pulse rounded-2xl border bg-muted/40"
+            />
+          ))}
         </div>
+      ) : assets.length ? (
+        <section className="space-y-3">
+          <div>
+            <h3 className="font-semibold">Your products</h3>
+            <p className="text-sm text-muted-foreground">
+              The daily figure becomes smaller the longer you continue using
+              each product.
+            </p>
+          </div>
+          <div className="grid gap-5 lg:grid-cols-2">
+            {assets.map((asset) => {
+              const assetType = (
+                asset.asset_type in iconMap ? asset.asset_type : "other"
+              ) as AssetType;
+              const Icon = iconMap[assetType];
+              return (
+                <Card
+                  key={asset.id}
+                  className="transition hover:border-primary/40 hover:shadow-md"
+                >
+                  <CardContent className="p-5 sm:p-6">
+                    <div className="flex items-start justify-between">
+                      <div className="grid size-12 place-items-center rounded-2xl bg-secondary">
+                        <Icon className="text-primary" />
+                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger
+                          render={<Button size="icon" variant="ghost" />}
+                        >
+                          <MoreHorizontal />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            variant="destructive"
+                            onClick={() => void remove(asset.id)}
+                          >
+                            <Trash2 />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                    <h3 className="mt-4 text-xl font-semibold">{asset.name}</h3>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                      <Badge variant="secondary" className="capitalize">
+                        {asset.asset_type}
+                      </Badge>
+                      <span className="text-sm text-muted-foreground">
+                        {formatAge(asset.purchased_on)}
+                      </span>
+                    </div>
+                    <div className="mt-5 rounded-2xl bg-primary/[0.08] p-4">
+                      <div className="flex items-center gap-2 text-sm font-medium text-primary">
+                        <Sparkles className="size-4" />
+                        Your cost per day
+                      </div>
+                      <p className="money mt-1 text-3xl font-semibold">
+                        {money(Number(asset.cost_per_day), 2)}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {money(Number(asset.purchase_price))} spread across{" "}
+                        {asset.age_days.toLocaleString()} days of use
+                      </p>
+                    </div>
+                    <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                      <Detail
+                        label="Purchased"
+                        value={new Date(
+                          `${asset.purchased_on}T00:00:00`,
+                        ).toLocaleDateString("en-IN", { dateStyle: "medium" })}
+                      />
+                      <Detail
+                        label="Days owned"
+                        value={asset.age_days.toLocaleString()}
+                      />
+                    </dl>
+                    {asset.notes && (
+                      <p className="mt-4 rounded-xl bg-muted p-3 text-sm text-muted-foreground">
+                        {asset.notes}
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </section>
       ) : (
         !error && (
           <Card className="border-dashed">
@@ -309,7 +360,7 @@ export default function AssetInventoryPage() {
                 <Package className="mx-auto size-10 text-muted-foreground" />
                 <h3 className="mt-3 font-semibold">No assets yet</h3>
                 <p className="text-sm text-muted-foreground">
-                  Add a product you own.
+                  Add a product to see its cost per day.
                 </p>
                 <Button className="mt-4" onClick={() => setOpen(true)}>
                   <Plus />
@@ -340,21 +391,34 @@ function formatAge(purchasedOn: string) {
     .join(" ");
   return text ? `${text} old` : "Bought today";
 }
-function Summary({ label, value }: { label: string; value: string }) {
+
+function Summary({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: typeof Package;
+  label: string;
+  value: string;
+}) {
   return (
-    <Card>
-      <CardContent className="p-5">
-        <p className="text-sm text-muted-foreground">{label}</p>
-        <p className="money mt-2 text-2xl font-semibold">{value}</p>
-      </CardContent>
-    </Card>
+    <div className="flex items-center gap-4 border-b p-5 last:border-b-0 sm:border-r sm:border-b-0 sm:last:border-r-0">
+      <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-background text-primary shadow-sm">
+        <Icon className="size-5" />
+      </span>
+      <div className="min-w-0">
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className="money truncate text-xl font-semibold">{value}</p>
+      </div>
+    </div>
   );
 }
-function Row({ label, value }: { label: string; value: string }) {
+
+function Detail({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between gap-4">
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="money text-right font-medium">{value}</dd>
+    <div className="rounded-xl border bg-muted/20 p-3">
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="money mt-1 font-medium">{value}</dd>
     </div>
   );
 }

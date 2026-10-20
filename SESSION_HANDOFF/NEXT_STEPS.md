@@ -1,84 +1,48 @@
 # Ordered Next Steps
 
-## 1. Rotate and verify secrets
+Updated: 20 October 2026 (Asia/Kolkata)
 
-- Reset the Supabase database password because the temporary password appeared
-  in chat.
-- Update only `backend/.env` or the deployment secret store.
-- Re-run `alembic current` and `alembic upgrade head`.
-- Never commit `.env`.
+## 1. Database release
 
-## 2. Verify Firebase Google authentication in the browser
+- Rotate any database password that appeared in chat.
+- Run `alembic upgrade head` with the deployment secret and confirm `20261020_0005`.
+- Test cross-user isolation for every financial endpoint.
 
-- Confirm `localhost` is listed in Firebase Authentication authorized domains.
-- Start FastAPI and Vite, complete one real Google sign-in, and verify the user
-  row including `photo_url` in PostgreSQL.
-- Add the eventual Vercel/custom domain to Firebase authorized domains.
-- Add the same public Vite values to Vercel and server-only auth settings to
-  Cloud Run.
-- Enable Firebase Authentication's Email/Password provider.
-- Local OTP delivery currently uses console/development mode. Configure SMTP
-  secrets and set `EMAIL_DELIVERY_MODE=smtp` for real inbox delivery.
+## 2. End-to-end verification
 
-## 3. Build the shared frontend data layer
+- Test Google and email/password sign-in plus email verification.
+- Create one account, category, transaction, asset, goal, budget, and recurring
+  rule; refresh and confirm every record remains in PostgreSQL.
+- Verify asset cost-per-day and reports using known test values.
+- Test Android Chrome, iPhone Safari, keyboard use, dark mode, and error states.
 
-- Central authenticated fetch client.
-- React Query provider, query keys, typed requests, mutation invalidation.
-- Consistent loading skeletons, empty states, errors, and retry behavior.
-- Generate or validate types against FastAPI OpenAPI.
+## 3. Complete finance CRUD
 
-## 4. Replace frontend mock data
+- Add edit operations for accounts, assets, categories, goals, budgets, and rules.
+- Derive live balances from opening balances plus ledger entries.
+- Model credit limits/statements, loans/EMIs, and investment valuations.
+- Add goal target dates and daily/weekly/monthly contribution requirements.
+- Add transaction splits, refunds, reversals, and audit history.
 
-Recommended order:
+## 4. Notifications and privacy
 
-1. Authentication, profile, onboarding.
-2. Categories and accounts.
-3. Transactions and dashboard.
-4. Goals and contributions.
-5. Budgets and recurring rules.
-6. Assets.
-7. Reports.
+- Store notification preferences in PostgreSQL.
+- Add an outbox and scheduled reminder worker.
+- Configure SMTP; keep codes and financial values out of logs.
+- Add account deletion and a versioned server-side export.
 
-## 5. Finish backend MVP modules
+## 5. Deployment
 
-- Credit-card details, statements, and bill-payment rules.
-- Loans, EMI schedules, principal/interest/fee allocation.
-- Investment valuations.
-- Transaction splits, refunds, and explicit reversals.
-- Goal target dates and daily/weekly/monthly saving requirements.
-- Recurring occurrence projection/materialization worker.
-- User data export and account deletion.
+- Deploy FastAPI to Cloud Run with Secret Manager and `AUTH_REQUIRED=true`.
+- Configure exact production CORS origins.
+- Deploy Vite to Vercel with root directory `frontend`.
+- Set `VITE_API_URL` to the Cloud Run `/api/v1` endpoint.
+- Add production domains to Firebase and run migrations as an explicit release step.
 
-## 6. Receipt OCR
+## 6. Release hardening
 
-- Private object storage.
-- File type/size validation and duplicate hashing.
-- OCR job and editable draft workflow.
-- Never create a cleared transaction without user confirmation.
-
-## 7. Gemini and notifications
-
-- Gemini receives minimized derived facts, never database credentials.
-- Deterministic code remains authoritative for financial calculations.
-- Add transactional outbox and reminders.
-- Application must work fully when Gemini is disabled.
-
-## 8. Repository and CI/CD
-
-- Initialize or correctly clone/connect the Git repository.
-- Confirm `.gitignore` protects `.env`, databases, virtual environments, and
-  build artifacts.
-- Add path-filtered frontend/backend CI.
-- Deploy backend to Cloud Run first.
-- Deploy frontend to Vercel with root directory `frontend`.
-- Set `VITE_API_URL` to the Cloud Run `/api/v1` URL.
-- Set production CORS to the final Vercel/custom domain.
-
-## 9. Release verification
-
-- Backend and frontend test suites.
-- Real iPhone Safari and Android Chrome testing.
-- Cross-user isolation and authorization tests.
-- Migration/backup/restore rehearsal.
-- Accessibility and performance review.
-- Secret scanning before the first public push.
+- Expand API authorization and abuse tests.
+- Add frontend component and end-to-end tests for money workflows.
+- Rehearse PostgreSQL backup/restore.
+- Add dependency scanning and protected-branch rules.
+- Review bundle size; Recharts and Firebase are the largest chunks.
