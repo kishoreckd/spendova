@@ -19,9 +19,16 @@
 
 ## Current warning
 
-A temporary Supabase password appeared in the previous chat. Rotate it before
+A temporary Supabase password appeared in an earlier chat. Rotate it before
 production and before treating the repository as secure. After rotation, verify
-that `alembic current` still returns `20261020_0003 (head)`.
+that `alembic current` returns the repository head (`20261020_0006` as of
+21 October 2026).
+
+All backend settings default to development values. A production deployment
+must set `ENVIRONMENT=production`, `AUTH_REQUIRED=true`, a long random
+`OTP_SECRET`, and `EMAIL_DELIVERY_MODE=smtp` with SMTP credentials; otherwise any
+caller can act as any user through `X-User-Id`, and verification codes are
+printed to logs.
 
 ## Authentication model
 

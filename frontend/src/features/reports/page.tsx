@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -24,20 +24,16 @@ import {
   YAxis,
 } from "recharts";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { useAuth } from "@/features/auth/auth-context";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { FormAlert } from "@/components/ui/field";
+import { useMoney } from "@/hooks/use-money";
 import {
   getDashboard,
-  listTransactions,
+  listAllTransactions,
   type DashboardSummary,
   type TransactionItem,
 } from "@/lib/api";
+import { errorMessage } from "@/lib/forms";
 
 const chartColors = [
   "var(--chart-1)",
@@ -48,57 +44,68 @@ const chartColors = [
 ];
 
 export default function ReportsPage() {
-  const { profile } = useAuth();
+  const currency = useMoney();
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [transactions, setTransactions] = useState<TransactionItem[]>([]);
   const [range, setRange] = useState<3 | 6 | 12>(6);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [today] = useState(() => new Date());
-  const currency = profile?.base_currency ?? "INR";
-  const money = (value: number) =>
-    new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency,
-      maximumFractionDigits: 0,
-    }).format(value);
+  const money = (value: number) => currency.format(value, 0);
 
+  const load = useCallback(
+    () =>
+      Promise.all([getDashboard(), listAllTransactions()])
+        .then(([nextSummary, nextTransactions]) => {
+          setSummary(nextSummary);
+          setTransactions(nextTransactions);
+          setError("");
+        })
+        .catch((reason) =>
+          setError(errorMessage(reason, "Could not load reports")),
+        )
+        .finally(() => setLoading(false)),
+    [],
+  );
   useEffect(() => {
-    Promise.all([getDashboard(), listTransactions(200)])
-      .then(([nextSummary, nextTransactions]) => {
-        setSummary(nextSummary);
-        setTransactions(nextTransactions);
-      })
-      .catch((reason) =>
-        setError(
-          reason instanceof Error ? reason.message : "Could not load reports",
-        ),
-      );
-  }, []);
+    void load();
+  }, [load]);
 
   const analysis = useMemo(
     () => buildAnalysis(transactions, today, range),
     [transactions, today, range],
   );
+  if (loading)
+    return (
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+          {[0, 1, 2, 3].map((item) => (
+            <div
+              key={item}
+              className="h-24 animate-pulse rounded-2xl bg-muted"
+            />
+          ))}
+        </div>
+        <div className="h-80 animate-pulse rounded-2xl bg-muted" />
+      </div>
+    );
   if (error)
     return (
-      <p
-        role="alert"
-        className="rounded-xl bg-destructive/10 p-4 text-sm text-destructive"
-      >
-        {error}
-      </p>
+      <div className="space-y-3">
+        <FormAlert>{error}</FormAlert>
+        <Button variant="outline" onClick={() => void load()}>
+          Try again
+        </Button>
+      </div>
     );
   if (!summary || !transactions.length) {
     return (
       <Card className="border-dashed">
-        <CardContent className="flex min-h-80 flex-col items-center justify-center p-8 text-center">
+        <CardContent className="flex min-h-64 flex-col items-center justify-center gap-4 p-8 text-center">
           <span className="rounded-2xl bg-primary/10 p-4 text-primary">
             <BarChart3 className="size-8" />
           </span>
-          <h2 className="mt-5 text-xl font-semibold">No report data yet</h2>
-          <p className="mt-2 max-w-md text-sm text-muted-foreground">
-            Add a cleared income or expense to start building your analytics.
-          </p>
+          <h2 className="font-semibold">No report data yet</h2>
         </CardContent>
       </Card>
     );
@@ -114,14 +121,12 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-semibold">Your financial picture</h2>
-          <p className="text-sm text-muted-foreground">
-            Real cleared transactions, with transfers excluded from spending.
-          </p>
-        </div>
-        <div className="flex rounded-xl bg-muted p-1" aria-label="Chart range">
+      <div className="flex justify-end">
+        <div
+          className="flex rounded-xl bg-muted p-1"
+          role="group"
+          aria-label="Chart range"
+        >
           {([3, 6, 12] as const).map((months) => (
             <Button
               key={months}
@@ -135,22 +140,21 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         <Metric
           icon={TrendingUp}
-          label="Income this month"
+          label="Income"
           value={money(income)}
-          detail="Cleared income"
           tone="positive"
         />
         <Metric
           icon={TrendingDown}
-          label="Spent this month"
+          label="Spent"
           value={money(spending)}
           detail={
             spendChange === null
-              ? "No previous-month comparison"
-              : `${Math.abs(spendChange).toFixed(1)}% ${spendChange <= 0 ? "less" : "more"} than last month`
+              ? undefined
+              : `${spendChange <= 0 ? "↓" : "↑"} ${Math.abs(spendChange).toFixed(0)}% vs last month`
           }
           tone={
             spendChange !== null && spendChange > 0 ? "negative" : undefined
@@ -158,20 +162,14 @@ export default function ReportsPage() {
         />
         <Metric
           icon={Wallet}
-          label="Net cash flow"
+          label="Net"
           value={money(income - spending)}
-          detail={
-            income >= spending
-              ? "You kept more than you spent"
-              : "Spending exceeded income"
-          }
           tone={income >= spending ? "positive" : "negative"}
         />
         <Metric
           icon={BarChart3}
-          label="Savings rate"
-          value={`${savingsRate.toFixed(1)}%`}
-          detail="Income left after expenses"
+          label="Saved"
+          value={`${savingsRate.toFixed(0)}%`}
           tone={savingsRate >= 0 ? "positive" : "negative"}
         />
       </div>
@@ -180,9 +178,6 @@ export default function ReportsPage() {
         <Card>
           <CardHeader>
             <CardTitle>Cash-flow trend</CardTitle>
-            <CardDescription>
-              Compare income and expenses across the last {range} months.
-            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="mb-4 flex gap-5 text-xs text-muted-foreground">
@@ -221,9 +216,6 @@ export default function ReportsPage() {
         <Card>
           <CardHeader>
             <CardTitle>Where money went</CardTitle>
-            <CardDescription>
-              Expense share by category this month.
-            </CardDescription>
           </CardHeader>
           <CardContent>
             {analysis.categories.length ? (
@@ -295,9 +287,6 @@ export default function ReportsPage() {
         <Card>
           <CardHeader>
             <CardTitle>Daily spending rhythm</CardTitle>
-            <CardDescription>
-              The dotted line is your average spending per calendar day.
-            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="h-72">
@@ -336,9 +325,6 @@ export default function ReportsPage() {
         <Card>
           <CardHeader>
             <CardTitle>Useful signals</CardTitle>
-            <CardDescription>
-              What deserves attention this month.
-            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <Signal
@@ -377,24 +363,28 @@ function Metric({
   icon: typeof Wallet;
   label: string;
   value: string;
-  detail: string;
+  detail?: string;
   tone?: "positive" | "negative";
 }) {
   return (
     <Card>
-      <CardContent className="p-5">
-        <div className="flex items-center justify-between">
+      <CardContent className="p-4 sm:p-5">
+        <div className="flex items-center justify-between gap-2">
           <p className="text-sm text-muted-foreground">{label}</p>
-          <span className="rounded-xl bg-muted p-2">
+          <span className="rounded-xl bg-muted p-1.5 sm:p-2">
             <Icon className="size-4" />
           </span>
         </div>
         <p
-          className={`money mt-3 text-2xl font-semibold ${tone === "positive" ? "text-emerald-600" : tone === "negative" ? "text-rose-600" : ""}`}
+          className={`money mt-2 truncate text-xl font-semibold sm:mt-3 sm:text-2xl ${tone === "positive" ? "text-emerald-600" : tone === "negative" ? "text-rose-600" : ""}`}
         >
           {value}
         </p>
-        <p className="mt-1 text-xs text-muted-foreground">{detail}</p>
+        {detail && (
+          <p className="mt-1 truncate text-xs text-muted-foreground">
+            {detail}
+          </p>
+        )}
       </CardContent>
     </Card>
   );

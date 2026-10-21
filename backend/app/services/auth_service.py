@@ -16,6 +16,12 @@ def find_user(db: Session, user_id: str) -> User:
     return user
 
 
-def verification_code_digest(user_id: str, code: str) -> str:
+def verification_code_digest(user_id: str, code: str, purpose: str = "verify-email") -> str:
+    """Keyed hash of a one-time code. `purpose` keeps reset and signup codes separate."""
     secret = get_settings().otp_secret.encode()
-    return hmac.new(secret, f"{user_id}:{code}".encode(), sha256).hexdigest()
+    message = f"{user_id}:{code}" if purpose == "verify-email" else f"{purpose}:{user_id}:{code}"
+    return hmac.new(secret, message.encode(), sha256).hexdigest()
+
+
+def token_digest(token: str) -> str:
+    return sha256(token.encode()).hexdigest()

@@ -95,7 +95,7 @@ def send_email_verification(
         )
     db.commit()
     try:
-        send_verification_code(user.email, code)
+        send_verification_code(user.email, code, user.display_name)
     except RuntimeError as exc:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
 

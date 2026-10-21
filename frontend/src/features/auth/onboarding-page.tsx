@@ -16,12 +16,49 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Field, FormAlert } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { useAuth } from "@/features/auth/auth-context";
-import { createAccount, createRecurringIncome } from "@/lib/api";
+import { createAccountRecord, createRecurringIncome } from "@/lib/api";
 import { trackEvent } from "@/lib/firebase";
+import { localDateISO } from "@/lib/format";
+import { controlProps, errorMessage, notifySuccess } from "@/lib/forms";
+
+type StepErrors = Partial<
+  Record<"country" | "currency" | "income" | "account", string>
+>;
+
+function isCurrencyCode(code: string) {
+  if (!/^[A-Z]{3}$/.test(code)) return false;
+  return Intl.supportedValuesOf?.("currency").includes(code) ?? true;
+}
+
+function validateStep(
+  step: number,
+  values: {
+    countryCode: string;
+    currency: string;
+    income: string;
+    accountName: string;
+  },
+) {
+  const errors: StepErrors = {};
+  if (step === 1) {
+    if (!/^[A-Z]{2}$/.test(values.countryCode))
+      errors.country = "Enter a two-letter country code, like IN or US";
+    if (!isCurrencyCode(values.currency))
+      errors.currency = "Enter a valid currency code, like INR or USD";
+  }
+  if (step === 2 && values.income.trim()) {
+    const income = values.income.replace(/,/g, "").trim();
+    if (!/^\d{1,15}(\.\d{1,2})?$/.test(income))
+      errors.income = "Use numbers only, with up to 2 decimals";
+  }
+  if (step === 3 && values.accountName.trim().length > 80)
+    errors.account = "Keep the name under 80 characters";
+  return errors;
+}
 
 const steps = [
   {
@@ -47,30 +84,60 @@ export default function OnboardingPage() {
   const [accountName, setAccountName] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<StepErrors>({});
   const navigate = useNavigate();
   const { updateProfile } = useAuth();
 
+  function next() {
+    const errors = validateStep(step, {
+      countryCode,
+      currency,
+      income,
+      accountName,
+    });
+    setFieldErrors(errors);
+    if (Object.keys(errors).length) {
+      document.getElementById(Object.keys(errors)[0])?.focus();
+      return;
+    }
+    if (step === 3) void complete(true);
+    else setStep(step + 1);
+  }
+
   async function complete(createSetup: boolean) {
+    if (!createSetup) {
+      const errors = validateStep(1, {
+        countryCode,
+        currency,
+        income,
+        accountName,
+      });
+      if (Object.keys(errors).length) {
+        setStep(1);
+        setFieldErrors(errors);
+        return;
+      }
+    }
     setSaving(true);
     setError("");
     try {
       const cleanAccountName = accountName.trim();
       if (createSetup && cleanAccountName) {
-        await createAccount({
+        await createAccountRecord({
           name: cleanAccountName,
           account_type: "bank",
           currency,
-          opening_balance: 0,
+          opening_balance: "0",
         });
-        const monthlyIncome = Number(income);
-        if (monthlyIncome > 0) {
+        const monthlyIncome = income.replace(/,/g, "").trim();
+        if (Number(monthlyIncome) > 0) {
           const nextMonth = new Date();
           nextMonth.setMonth(nextMonth.getMonth() + 1, 1);
           await createRecurringIncome({
             name: "Monthly income",
             amount: monthlyIncome,
             currency,
-            next_due_on: nextMonth.toISOString().slice(0, 10),
+            next_due_on: localDateISO(nextMonth),
             destination: cleanAccountName,
           });
         }
@@ -85,10 +152,11 @@ export default function OnboardingPage() {
       void trackEvent(
         createSetup ? "onboarding_completed" : "onboarding_skipped",
       );
+      notifySuccess("You're all set", "Your Spendova workspace is ready.");
       navigate("/", { replace: true });
     } catch (reason) {
       setError(
-        reason instanceof Error ? reason.message : "Could not complete setup",
+        errorMessage(reason, "Could not complete setup. Please try again."),
       );
     } finally {
       setSaving(false);
@@ -161,105 +229,114 @@ export default function OnboardingPage() {
             <CardContent className="space-y-6 px-6 pb-6 sm:px-8 sm:pb-8">
               {step === 1 && (
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="country">Country code</Label>
+                  <Field
+                    id="country"
+                    label="Country code"
+                    hint="Two letters, like IN or US"
+                    error={fieldErrors.country}
+                  >
                     <Input
-                      id="country"
+                      {...controlProps("country", fieldErrors.country)}
                       value={countryCode}
                       maxLength={2}
+                      autoComplete="country"
                       placeholder="IN"
-                      onChange={(event) =>
-                        setCountryCode(event.target.value.toUpperCase())
-                      }
+                      onChange={(event) => {
+                        setCountryCode(event.target.value.toUpperCase());
+                        setFieldErrors((current) => ({
+                          ...current,
+                          country: undefined,
+                        }));
+                      }}
                     />
-                    <p className="text-xs text-muted-foreground">
-                      Two-letter country code
-                    </p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="currency">Primary currency</Label>
+                  </Field>
+                  <Field
+                    id="currency"
+                    label="Primary currency"
+                    hint="Three letters, like INR or USD"
+                    error={fieldErrors.currency}
+                  >
                     <Input
-                      id="currency"
+                      {...controlProps("currency", fieldErrors.currency)}
                       value={currency}
                       maxLength={3}
                       placeholder="INR"
-                      onChange={(event) =>
-                        setCurrency(event.target.value.toUpperCase())
-                      }
+                      onChange={(event) => {
+                        setCurrency(event.target.value.toUpperCase());
+                        setFieldErrors((current) => ({
+                          ...current,
+                          currency: undefined,
+                        }));
+                      }}
                     />
-                    <p className="text-xs text-muted-foreground">
-                      Three-letter currency code
-                    </p>
-                  </div>
+                  </Field>
                 </div>
               )}
               {step === 2 && (
-                <div className="space-y-2">
-                  <Label htmlFor="income">Monthly income (optional)</Label>
+                <Field
+                  id="income"
+                  label="Monthly income"
+                  optional
+                  hint="Leave this blank if your income changes or you want to add it later."
+                  error={fieldErrors.income}
+                >
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                       {currency}
                     </span>
                     <Input
-                      id="income"
+                      {...controlProps("income", fieldErrors.income)}
                       className="pl-14"
                       value={income}
                       inputMode="decimal"
-                      type="number"
-                      min="0"
+                      autoComplete="off"
                       placeholder="0"
-                      onChange={(event) => setIncome(event.target.value)}
+                      onChange={(event) => {
+                        setIncome(event.target.value);
+                        setFieldErrors((current) => ({
+                          ...current,
+                          income: undefined,
+                        }));
+                      }}
                     />
                   </div>
-                  <p className="text-sm text-muted-foreground">
-                    Leave this blank if your income changes or you want to add
-                    it later.
-                  </p>
-                </div>
+                </Field>
               )}
               {step === 3 && (
-                <div className="space-y-2">
-                  <Label htmlFor="account">Account name (optional)</Label>
+                <Field
+                  id="account"
+                  label="Account name"
+                  optional
+                  hint="No sample balance will be added. Your opening balance starts at zero."
+                  error={fieldErrors.account}
+                >
                   <Input
-                    id="account"
+                    {...controlProps("account", fieldErrors.account)}
                     value={accountName}
                     placeholder="e.g. Salary account"
                     onChange={(event) => setAccountName(event.target.value)}
                   />
-                  <p className="text-sm text-muted-foreground">
-                    No sample balance will be added. Your opening balance starts
-                    at zero.
-                  </p>
-                </div>
+                </Field>
               )}
-              {error && (
-                <p
-                  role="alert"
-                  className="rounded-xl bg-destructive/10 p-3 text-sm text-destructive"
-                >
-                  {error}
-                </p>
-              )}
+              <FormAlert>{error}</FormAlert>
               <div className="flex items-center justify-between border-t pt-5">
                 <Button
                   variant="ghost"
                   disabled={step === 1 || saving}
-                  onClick={() => setStep(step - 1)}
+                  onClick={() => {
+                    setFieldErrors({});
+                    setStep(step - 1);
+                  }}
                 >
                   <ArrowLeft /> Back
                 </Button>
-                <Button
-                  disabled={saving || !countryCode || !currency}
-                  onClick={() =>
-                    step === 3 ? void complete(true) : setStep(step + 1)
-                  }
-                >
+                <Button loading={saving} onClick={next}>
                   {saving
                     ? "Saving…"
                     : step === 3
                       ? "Finish setup"
                       : "Continue"}
-                  {!saving && <ArrowRight />}
+                  <ArrowRight />
                 </Button>
               </div>
             </CardContent>

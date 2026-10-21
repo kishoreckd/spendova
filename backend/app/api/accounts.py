@@ -4,17 +4,35 @@ from sqlalchemy.orm import Session
 
 from ..auth import CurrentUser, get_current_user
 from ..db.session import get_db
-from ..models import Account
+from ..models import Account, Transaction
 from ..schemas import AccountCreate, AccountRead
 from ..utils.validation.json_validator import ApiResponse, JsonResponse
 
 router = APIRouter(prefix="/accounts", tags=["accounts"])
 
 
+def account_payload(account: Account, transactions: list[Transaction]) -> dict:
+    balance = account.opening_balance
+    for transaction in transactions:
+        if transaction.status == "voided":
+            continue
+        if transaction.source_account_id == account.id or (
+            transaction.source_account_id is None and transaction.source == account.name
+        ):
+            balance -= transaction.amount
+        if transaction.destination_account_id == account.id or (
+            transaction.destination_account_id is None and transaction.destination == account.name
+        ):
+            balance += transaction.amount
+    return {**{column.name: getattr(account, column.name) for column in Account.__table__.columns}, "current_balance": balance}
+
+
 @router.get("", response_model=ApiResponse[list[AccountRead]])
 def list_accounts(user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_db)):
     query = select(Account).where(Account.user_id == user.id, Account.archived.is_(False)).order_by(Account.created_at)
-    return JsonResponse.success("Accounts retrieved", db.scalars(query).all())
+    accounts = list(db.scalars(query).all())
+    transactions = list(db.scalars(select(Transaction).where(Transaction.user_id == user.id)).all())
+    return JsonResponse.success("Accounts retrieved", [account_payload(account, transactions) for account in accounts])
 
 
 @router.post("", response_model=ApiResponse[AccountRead], status_code=status.HTTP_201_CREATED)
@@ -23,7 +41,7 @@ def create_account(payload: AccountCreate, user: CurrentUser = Depends(get_curre
     db.add(record)
     db.commit()
     db.refresh(record)
-    return JsonResponse.success("Account created", record, status.HTTP_201_CREATED)
+    return JsonResponse.success("Account created", account_payload(record, []), status.HTTP_201_CREATED)
 
 
 @router.delete("/{account_id}", status_code=status.HTTP_204_NO_CONTENT)

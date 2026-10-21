@@ -1,87 +1,56 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { intervalToDuration } from "date-fns";
 import {
-  Car,
+  BadgeCheck,
   CircleDollarSign,
   Clock3,
-  Laptop,
+  Flag,
   MoreHorizontal,
   Package,
+  Pencil,
   Plus,
-  Smartphone,
-  Sparkles,
+  Target,
   Trash2,
+  TrendingDown,
 } from "lucide-react";
+import { cn } from "cn";
+import { PageActions } from "@/app/page-actions";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { FormAlert } from "@/components/ui/field";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  archiveAsset,
-  createAsset,
-  listAssets,
-  type AssetItem,
-} from "@/lib/api";
-
-type AssetType = "phone" | "computer" | "vehicle" | "appliance" | "other";
-const iconMap = {
-  phone: Smartphone,
-  computer: Laptop,
-  vehicle: Car,
-  appliance: Package,
-  other: Package,
-};
-const money = (value: number, digits = 0) =>
-  new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  }).format(value);
+import { Progress } from "@/components/ui/progress";
+import { useMoney } from "@/hooks/use-money";
+import { archiveAsset, listAssets, type AssetItem } from "@/lib/api";
+import { errorMessage, notifySuccess } from "@/lib/forms";
+import { AssetFormDialog } from "./asset-form-dialog";
+import { describeAge, describeLife } from "./asset-goal";
+import { assetTypeTile } from "./asset-types";
 
 export default function AssetInventoryPage() {
+  const currency = useMoney();
   const [assets, setAssets] = useState<AssetItem[]>([]);
-  const [open, setOpen] = useState(false);
-  const [type, setType] = useState<AssetType>("phone");
-  const [error, setError] = useState("");
-  const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [today] = useState(() => new Date().toISOString().slice(0, 10));
+  const [loadError, setLoadError] = useState("");
+  const [editing, setEditing] = useState<AssetItem | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [removing, setRemoving] = useState<AssetItem | null>(null);
+
   const load = useCallback(
     () =>
       listAssets()
         .then((records) => {
           setAssets(records);
-          setError("");
+          setLoadError("");
         })
         .catch((reason) =>
-          setError(
-            reason instanceof Error ? reason.message : "Could not load assets",
-          ),
+          setLoadError(errorMessage(reason, "Could not load your assets")),
         )
         .finally(() => setLoading(false)),
     [],
@@ -90,146 +59,48 @@ export default function AssetInventoryPage() {
     void load();
   }, [load]);
 
-  const total = useMemo(
-    () => assets.reduce((sum, item) => sum + Number(item.purchase_price), 0),
+  const totals = useMemo(
+    () => ({
+      paid: assets.reduce((sum, item) => sum + Number(item.purchase_price), 0),
+      daily: assets.reduce((sum, item) => sum + Number(item.cost_per_day), 0),
+      withGoal: assets.filter((item) => item.replacement_goal).length,
+      reached: assets.filter((item) => item.replacement_goal?.reached).length,
+    }),
     [assets],
   );
-  const combinedDailyCost = useMemo(
-    () => assets.reduce((sum, item) => sum + Number(item.cost_per_day), 0),
+  const usedTypes = useMemo(
+    () => assets.map((item) => item.asset_type),
     [assets],
   );
 
-  async function submit(data: FormData) {
-    setSaving(true);
-    setError("");
-    try {
-      await createAsset({
-        name: String(data.get("name")).trim(),
-        asset_type: type,
-        purchase_price: Number(data.get("price")),
-        purchased_on: String(data.get("purchasedOn")),
-        currency: "INR",
-        notes: String(data.get("notes") || ""),
-      });
-      await load();
-      setOpen(false);
-    } catch (reason) {
-      setError(
-        reason instanceof Error ? reason.message : "Could not save asset",
-      );
-    } finally {
-      setSaving(false);
-    }
+  function openForm(asset: AssetItem | null) {
+    setEditing(asset);
+    setFormOpen(true);
   }
 
-  async function remove(id: string) {
-    try {
-      await archiveAsset(id);
-      await load();
-    } catch (reason) {
-      setError(
-        reason instanceof Error ? reason.message : "Could not remove asset",
-      );
-    }
+  function onSaved(saved: AssetItem, created: boolean) {
+    setAssets((current) =>
+      created
+        ? [saved, ...current]
+        : current.map((item) => (item.id === saved.id ? saved : item)),
+    );
+    notifySuccess(
+      created ? `${saved.name} added` : `${saved.name} updated`,
+      `Costs you ${currency.format(saved.cost_per_day)} per day so far.`,
+    );
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-semibold">My assets</h2>
-          <p className="text-sm text-muted-foreground">
-            See how your purchase cost reduces across every day of use.
-          </p>
-        </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger render={<Button />}>
-            <Plus />
-            Add asset
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add an asset</DialogTitle>
-              <DialogDescription>
-                Record the product and original price. Subscriptions, insurance,
-                and repairs remain expenses.
-              </DialogDescription>
-            </DialogHeader>
-            <form action={submit} className="space-y-4">
-              <div className="space-y-2">
-                <Label>Asset name</Label>
-                <Input name="name" required placeholder="e.g. iPhone 16" />
-              </div>
-              <div className="space-y-2">
-                <Label>Type</Label>
-                <Select
-                  value={type}
-                  onValueChange={(value) =>
-                    value && setType(value as AssetType)
-                  }
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="phone">Phone</SelectItem>
-                    <SelectItem value="computer">Computer</SelectItem>
-                    <SelectItem value="vehicle">Vehicle</SelectItem>
-                    <SelectItem value="appliance">Home appliance</SelectItem>
-                    <SelectItem value="other">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-3 min-[400px]:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Purchase price</Label>
-                  <Input
-                    name="price"
-                    required
-                    min="0.01"
-                    step="0.01"
-                    type="number"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Purchase date</Label>
-                  <Input name="purchasedOn" required type="date" max={today} />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label>Notes</Label>
-                <Textarea
-                  name="notes"
-                  placeholder="Warranty, model, or condition"
-                />
-              </div>
-              {error && (
-                <p
-                  role="alert"
-                  className="rounded-xl bg-destructive/10 p-3 text-sm text-destructive"
-                >
-                  {error}
-                </p>
-              )}
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => setOpen(false)}
-                >
-                  Cancel
-                </Button>
-                <Button disabled={saving} type="submit">
-                  {saving ? "Adding…" : "Add asset"}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-      </div>
+      <PageActions>
+        <Button aria-label="Add asset" onClick={() => openForm(null)}>
+          <Plus />
+          <span className="hidden sm:inline">Add asset</span>
+        </Button>
+      </PageActions>
 
       <Card className="overflow-hidden border-primary/15 bg-gradient-to-br from-primary/[0.07] via-card to-card">
-        <CardContent className="grid p-0 sm:grid-cols-3">
+        <CardContent className="grid grid-cols-2 p-0 lg:grid-cols-4">
           <Summary
             icon={Package}
             label="Assets owned"
@@ -237,132 +108,65 @@ export default function AssetInventoryPage() {
           />
           <Summary
             icon={CircleDollarSign}
-            label="Original amount spent"
-            value={money(total)}
+            label="Total paid"
+            value={currency.format(totals.paid, 0)}
           />
           <Summary
             icon={Clock3}
             label="Combined cost per day"
-            value={money(combinedDailyCost, 2)}
+            value={currency.format(totals.daily)}
+          />
+          <Summary
+            icon={BadgeCheck}
+            label="Paid for themselves"
+            value={
+              totals.withGoal
+                ? `${totals.reached} of ${totals.withGoal}`
+                : "No goals yet"
+            }
           />
         </CardContent>
       </Card>
 
-      {error && !open && (
-        <p
-          role="alert"
-          className="rounded-xl bg-destructive/10 p-3 text-sm text-destructive"
-        >
-          {error}
-        </p>
+      {loadError && (
+        <div className="space-y-3">
+          <FormAlert>{loadError}</FormAlert>
+          <Button variant="outline" onClick={() => void load()}>
+            Try again
+          </Button>
+        </div>
       )}
+
       {loading ? (
         <div className="grid gap-5 lg:grid-cols-2">
           {[0, 1].map((item) => (
             <div
               key={item}
-              className="h-72 animate-pulse rounded-2xl border bg-muted/40"
+              className="h-80 animate-pulse rounded-2xl border bg-muted/40"
             />
           ))}
         </div>
       ) : assets.length ? (
-        <section className="space-y-3">
-          <div>
-            <h3 className="font-semibold">Your products</h3>
-            <p className="text-sm text-muted-foreground">
-              The daily figure becomes smaller the longer you continue using
-              each product.
-            </p>
-          </div>
-          <div className="grid gap-5 lg:grid-cols-2">
-            {assets.map((asset) => {
-              const assetType = (
-                asset.asset_type in iconMap ? asset.asset_type : "other"
-              ) as AssetType;
-              const Icon = iconMap[assetType];
-              return (
-                <Card
-                  key={asset.id}
-                  className="transition hover:border-primary/40 hover:shadow-md"
-                >
-                  <CardContent className="p-5 sm:p-6">
-                    <div className="flex items-start justify-between">
-                      <div className="grid size-12 place-items-center rounded-2xl bg-secondary">
-                        <Icon className="text-primary" />
-                      </div>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger
-                          render={<Button size="icon" variant="ghost" />}
-                        >
-                          <MoreHorizontal />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            variant="destructive"
-                            onClick={() => void remove(asset.id)}
-                          >
-                            <Trash2 />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                    <h3 className="mt-4 text-xl font-semibold">{asset.name}</h3>
-                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                      <Badge variant="secondary" className="capitalize">
-                        {asset.asset_type}
-                      </Badge>
-                      <span className="text-sm text-muted-foreground">
-                        {formatAge(asset.purchased_on)}
-                      </span>
-                    </div>
-                    <div className="mt-5 rounded-2xl bg-primary/[0.08] p-4">
-                      <div className="flex items-center gap-2 text-sm font-medium text-primary">
-                        <Sparkles className="size-4" />
-                        Your cost per day
-                      </div>
-                      <p className="money mt-1 text-3xl font-semibold">
-                        {money(Number(asset.cost_per_day), 2)}
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {money(Number(asset.purchase_price))} spread across{" "}
-                        {asset.age_days.toLocaleString()} days of use
-                      </p>
-                    </div>
-                    <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                      <Detail
-                        label="Purchased"
-                        value={new Date(
-                          `${asset.purchased_on}T00:00:00`,
-                        ).toLocaleDateString("en-IN", { dateStyle: "medium" })}
-                      />
-                      <Detail
-                        label="Days owned"
-                        value={asset.age_days.toLocaleString()}
-                      />
-                    </dl>
-                    {asset.notes && (
-                      <p className="mt-4 rounded-xl bg-muted p-3 text-sm text-muted-foreground">
-                        {asset.notes}
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </section>
+        <div className="grid gap-5 lg:grid-cols-2">
+          {assets.map((asset) => (
+            <AssetCard
+              key={asset.id}
+              asset={asset}
+              onEdit={() => openForm(asset)}
+              onRemove={() => setRemoving(asset)}
+            />
+          ))}
+        </div>
       ) : (
-        !error && (
+        !loadError && (
           <Card className="border-dashed">
-            <CardContent className="grid min-h-56 place-items-center p-8 text-center">
-              <div>
-                <Package className="mx-auto size-10 text-muted-foreground" />
-                <h3 className="mt-3 font-semibold">No assets yet</h3>
-                <p className="text-sm text-muted-foreground">
-                  Add a product to see its cost per day.
-                </p>
-                <Button className="mt-4" onClick={() => setOpen(true)}>
+            <CardContent className="grid min-h-64 place-items-center p-8 text-center">
+              <div className="max-w-sm">
+                <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-primary/10 text-primary">
+                  <Package className="size-7" />
+                </span>
+                <h3 className="mt-4 font-semibold">No assets yet</h3>
+                <Button className="mt-5" onClick={() => openForm(null)}>
                   <Plus />
                   Add first asset
                 </Button>
@@ -371,25 +175,184 @@ export default function AssetInventoryPage() {
           </Card>
         )
       )}
+
+      <AssetFormDialog
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        asset={editing}
+        usedTypes={usedTypes}
+        onSaved={onSaved}
+      />
+      <ConfirmDialog
+        open={!!removing}
+        onOpenChange={(open) => !open && setRemoving(null)}
+        title={`Remove ${removing?.name ?? "this asset"}?`}
+        description="It will no longer appear in your assets or daily cost totals. Expenses you recorded for it are kept."
+        confirmLabel="Remove asset"
+        onConfirm={async () => {
+          if (!removing) return;
+          await archiveAsset(removing.id);
+          setAssets((current) =>
+            current.filter((item) => item.id !== removing.id),
+          );
+          notifySuccess(`${removing.name} removed`);
+        }}
+      />
     </div>
   );
 }
 
-function formatAge(purchasedOn: string) {
-  const duration = intervalToDuration({
-    start: new Date(`${purchasedOn}T00:00:00`),
-    end: new Date(),
-  });
-  const parts = [
-    [duration.years, "year"],
-    [duration.months, "month"],
-    [duration.days, "day"],
-  ] as const;
-  const text = parts
-    .filter(([value]) => value)
-    .map(([value, unit]) => `${value} ${unit}${value === 1 ? "" : "s"}`)
-    .join(" ");
-  return text ? `${text} old` : "Bought today";
+function AssetCard({
+  asset,
+  onEdit,
+  onRemove,
+}: {
+  asset: AssetItem;
+  onEdit: () => void;
+  onRemove: () => void;
+}) {
+  const currency = useMoney();
+  const type = assetTypeTile(asset.asset_type);
+  const Icon = type.icon;
+  const goal = asset.replacement_goal;
+  return (
+    <Card className="transition hover:border-primary/40 hover:shadow-md">
+      <CardContent className="space-y-5 p-5 sm:p-6">
+        <div className="flex items-start gap-3">
+          <span
+            className="grid size-12 shrink-0 place-items-center rounded-2xl"
+            style={{
+              color: type.color,
+              backgroundColor: `color-mix(in oklch, ${type.color} 14%, transparent)`,
+            }}
+          >
+            <Icon />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h3 className="truncate text-lg font-semibold">{asset.name}</h3>
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+              <Badge variant="secondary">{type.label}</Badge>
+              <span>
+                {describeAge(asset.age_days)} ·{" "}
+                {asset.age_days.toLocaleString()} days
+              </span>
+            </div>
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  aria-label={`Actions for ${asset.name}`}
+                />
+              }
+            >
+              <MoreHorizontal />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={onEdit}>
+                <Pencil />
+                Edit
+              </DropdownMenuItem>
+              <DropdownMenuItem variant="destructive" onClick={onRemove}>
+                <Trash2 />
+                Remove
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        <div className="rounded-2xl bg-primary/[0.08] p-4">
+          <p className="flex items-center gap-1.5 text-sm font-medium text-primary">
+            <TrendingDown className="size-4" />
+            Cost per day so far
+          </p>
+          <p className="money mt-1 text-3xl font-semibold">
+            {currency.format(asset.cost_per_day)}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {currency.format(asset.purchase_price, 0)} · bought{" "}
+            {currency.date(asset.purchased_on)}
+          </p>
+        </div>
+
+        {goal ? (
+          <div
+            className={cn(
+              "space-y-3 rounded-2xl border p-4",
+              goal.reached && "border-emerald-500/30 bg-emerald-500/[0.06]",
+            )}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs text-muted-foreground">
+                  {asset.expected_life_months
+                    ? `Goal · ${describeLife(asset.expected_life_months)} of use`
+                    : "Goal · your daily cost target"}
+                </p>
+                <p className="money font-semibold">
+                  {currency.format(goal.target_cost_per_day)} per day
+                </p>
+              </div>
+              <span
+                className={cn(
+                  "money text-sm font-semibold",
+                  goal.reached ? "text-emerald-600" : "text-primary",
+                )}
+              >
+                {goal.progress_percent}%
+              </span>
+            </div>
+            <Progress
+              value={goal.progress_percent}
+              aria-label={`${goal.progress_percent}% of the way to your goal`}
+              className={cn(
+                goal.reached &&
+                  "[&_[data-slot=progress-indicator]]:bg-emerald-500",
+              )}
+            />
+            {goal.reached ? (
+              <p className="flex items-start gap-2 text-sm">
+                <BadgeCheck className="mt-0.5 size-4 shrink-0 text-emerald-600" />
+                <span>
+                  Goal reached on{" "}
+                  <strong>{currency.date(goal.reached_on)}</strong>
+                </span>
+              </p>
+            ) : (
+              <p className="flex items-start gap-2 text-sm text-muted-foreground">
+                <Flag className="mt-0.5 size-4 shrink-0 text-primary" />
+                <span>
+                  <strong className="text-foreground">
+                    {goal.days_remaining.toLocaleString()} days to go
+                  </strong>{" "}
+                  · reached on {currency.date(goal.reached_on)}
+                </span>
+              </p>
+            )}
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={onEdit}
+            className="flex w-full items-center gap-3 rounded-2xl border border-dashed p-4 text-left transition hover:border-primary/50 hover:bg-primary/[0.03]"
+          >
+            <Target className="size-5 shrink-0 text-primary" />
+            <span className="flex-1 text-sm font-medium">
+              Set a replacement goal
+            </span>
+          </button>
+        )}
+
+        {asset.notes && (
+          <p className="rounded-xl bg-muted p-3 text-sm text-muted-foreground">
+            {asset.notes}
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
 }
 
 function Summary({
@@ -402,23 +365,16 @@ function Summary({
   value: string;
 }) {
   return (
-    <div className="flex items-center gap-4 border-b p-5 last:border-b-0 sm:border-r sm:border-b-0 sm:last:border-r-0">
+    <div className="flex items-center gap-3 border-b border-r p-4 even:border-r-0 sm:p-5 lg:border-b-0 lg:even:border-r lg:last:border-r-0 [&:nth-last-child(-n+2)]:border-b-0">
       <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-background text-primary shadow-sm">
         <Icon className="size-5" />
       </span>
       <div className="min-w-0">
         <p className="text-xs text-muted-foreground">{label}</p>
-        <p className="money truncate text-xl font-semibold">{value}</p>
+        <p className="money truncate text-lg font-semibold sm:text-xl">
+          {value}
+        </p>
       </div>
-    </div>
-  );
-}
-
-function Detail({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl border bg-muted/20 p-3">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="money mt-1 font-medium">{value}</dd>
     </div>
   );
 }

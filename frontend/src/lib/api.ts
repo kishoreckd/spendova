@@ -19,10 +19,17 @@ export type SpendovaUser = {
 
 export class ApiError extends Error {
   readonly status: number;
+  /** Server validation messages keyed by request field name. */
+  readonly fieldErrors: Record<string, string>;
 
-  constructor(message: string, status: number) {
+  constructor(
+    message: string,
+    status: number,
+    fieldErrors: Record<string, string> = {},
+  ) {
     super(message);
     this.status = status;
+    this.fieldErrors = fieldErrors;
   }
 }
 
@@ -31,6 +38,20 @@ type ApiEnvelope<T> = {
   message: string;
   data: T | null;
 };
+
+type ValidationDetail = { field: string; message: string };
+
+function fieldErrorsFrom(data: unknown) {
+  if (!Array.isArray(data)) return {};
+  return Object.fromEntries(
+    (data as ValidationDetail[])
+      .filter((item) => typeof item?.field === "string")
+      .map((item) => [
+        item.field.split(" -> ").at(-1) ?? item.field,
+        item.message.replace(/^Value error, /, ""),
+      ]),
+  );
+}
 
 export async function apiRequest<T>(
   path: string,
@@ -43,13 +64,27 @@ export async function apiRequest<T>(
   }
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
-  const response = await fetch(`${API_URL}${path}`, { ...init, headers });
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${path}`, { ...init, headers });
+  } catch {
+    throw new ApiError(
+      "Spendova can't be reached right now. Check your connection and try again.",
+      0,
+    );
+  }
   const body =
     response.status === 204 ? null : await response.json().catch(() => null);
   if (!response.ok) {
+    const fieldErrors = fieldErrorsFrom(body?.data);
     throw new ApiError(
-      body?.message ?? body?.detail ?? "The request could not be completed",
+      Object.keys(fieldErrors).length
+        ? "Some details need attention."
+        : (body?.message ??
+            body?.detail ??
+            "The request could not be completed. Please try again."),
       response.status,
+      fieldErrors,
     );
   }
   if (response.status === 204) return undefined as T;
@@ -93,21 +128,38 @@ export function confirmVerificationCode(code: string) {
   });
 }
 
-export function createAccount(payload: {
-  name: string;
-  account_type: string;
-  currency: string;
-  opening_balance: number;
-}) {
-  return apiRequest("/accounts", {
+export function requestPasswordReset(email: string) {
+  return apiRequest<{
+    sent: boolean;
+    expires_in_seconds: number;
+    resend_after_seconds: number;
+    development_code: string | null;
+  }>("/auth/password-reset/request", {
     method: "POST",
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ email }),
+  });
+}
+
+export function verifyPasswordReset(email: string, code: string) {
+  return apiRequest<{ reset_token: string; expires_in_seconds: number }>(
+    "/auth/password-reset/verify",
+    { method: "POST", body: JSON.stringify({ email, code }) },
+  );
+}
+
+export function completePasswordReset(resetToken: string, newPassword: string) {
+  return apiRequest<{ email: string }>("/auth/password-reset/complete", {
+    method: "POST",
+    body: JSON.stringify({
+      reset_token: resetToken,
+      new_password: newPassword,
+    }),
   });
 }
 
 export function createRecurringIncome(payload: {
   name: string;
-  amount: number;
+  amount: string;
   currency: string;
   next_due_on: string;
   destination: string;
@@ -125,21 +177,29 @@ export function createRecurringIncome(payload: {
   });
 }
 
+/** Money travels as a decimal string so no binary rounding is introduced. */
 export type NewTransaction = {
   kind: "expense" | "income" | "transfer";
-  amount: number;
+  amount: string;
   source: string;
   destination: string;
+  source_account_id?: string | null;
+  destination_account_id?: string | null;
   merchant?: string;
   occurred_on: string;
   currency: string;
   category_id?: string;
+  recurring_rule_id?: string;
+  notes?: string;
 };
 
-export function createTransaction(payload: NewTransaction) {
+export function createTransaction(
+  payload: NewTransaction,
+  idempotencyKey?: string,
+) {
   return apiRequest("/transactions", {
     method: "POST",
-    headers: { "Idempotency-Key": crypto.randomUUID() },
+    headers: { "Idempotency-Key": idempotencyKey ?? crypto.randomUUID() },
     body: JSON.stringify(payload),
   });
 }
@@ -158,14 +218,53 @@ export type DashboardSummary = {
   }>;
 };
 
-export type TransactionItem = NewTransaction & { id: string; status: string };
+export type TransactionItem = Omit<
+  NewTransaction,
+  "merchant" | "category_id" | "notes"
+> & {
+  id: string;
+  status: string;
+  merchant: string | null;
+  category_id: string | null;
+  notes: string | null;
+};
 
-export function getDashboard() {
-  return apiRequest<DashboardSummary>("/dashboard");
+export function getDashboard(
+  year?: number,
+  month?: number,
+  accountId?: string,
+) {
+  const params = new URLSearchParams();
+  if (year) params.set("year", String(year));
+  if (month) params.set("month", String(month));
+  if (accountId) params.set("account_id", accountId);
+  const query = params.size ? `?${params}` : "";
+  return apiRequest<DashboardSummary>(`/dashboard${query}`);
 }
 
-export function listTransactions(limit = 5) {
-  return apiRequest<TransactionItem[]>(`/transactions?limit=${limit}`);
+export function listTransactions(
+  limit = 5,
+  filters: { from?: string; to?: string; accountId?: string } = {},
+) {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (filters.from) params.set("from_date", filters.from);
+  if (filters.to) params.set("to_date", filters.to);
+  if (filters.accountId) params.set("account_id", filters.accountId);
+  return apiRequest<TransactionItem[]>(`/transactions?${params}`);
+}
+
+const TRANSACTION_PAGE_SIZE = 200;
+
+/** Every transaction, fetched page by page; the API caps one page at 200. */
+export async function listAllTransactions() {
+  const all: TransactionItem[] = [];
+  for (let offset = 0; ; offset += TRANSACTION_PAGE_SIZE) {
+    const page = await apiRequest<TransactionItem[]>(
+      `/transactions?limit=${TRANSACTION_PAGE_SIZE}&offset=${offset}`,
+    );
+    all.push(...page);
+    if (page.length < TRANSACTION_PAGE_SIZE) return all;
+  }
 }
 
 export type BudgetItem = {
@@ -189,11 +288,107 @@ export type RecurringItem = {
   kind: "expense" | "income" | "transfer";
   amount: string;
   currency: string;
+  frequency: string;
+  interval: number;
   next_due_on: string;
+  source: string;
+  destination: string;
+  source_account_id: string | null;
+  destination_account_id: string | null;
+  category_id: string | null;
+  plan_type: "bill" | "income" | "investment";
+  cost_amount: string | null;
+  annual_return_rate: string | null;
+  tenure_months: number | null;
 };
 
 export const listBudgets = () => apiRequest<BudgetItem[]>("/budgets");
 export const listGoals = () => apiRequest<GoalItem[]>("/goals");
+export type BudgetStatus = {
+  budget_id: string;
+  limit: string;
+  spent: string;
+  remaining: string;
+  lines: Array<{
+    category_id: string;
+    limit: string;
+    spent: string;
+    remaining: string;
+  }>;
+};
+export const getBudgetStatus = (id: string) =>
+  apiRequest<BudgetStatus>(`/budgets/${id}/status`);
+export const createBudget = (payload: {
+  name: string;
+  month: string;
+  total_limit: string;
+  lines: Array<{ category_id: string; amount_limit: string }>;
+}) =>
+  apiRequest<BudgetItem>("/budgets", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+export const deleteBudget = (id: string) =>
+  apiRequest<void>(`/budgets/${id}`, { method: "DELETE" });
+
+export const createCommitment = (payload: {
+  kind: "expense" | "income" | "transfer";
+  name: string;
+  amount: string;
+  currency: string;
+  frequency: "daily" | "weekly" | "monthly" | "yearly";
+  interval: number;
+  next_due_on: string;
+  source: string;
+  destination: string;
+  source_account_id?: string | null;
+  destination_account_id?: string | null;
+  category_id: string | null;
+  plan_type: "bill" | "income" | "investment";
+  cost_amount?: string | null;
+  annual_return_rate?: string | null;
+  tenure_months?: number | null;
+}) =>
+  apiRequest<RecurringItem>("/recurring-rules", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+export const stopRecurringRule = (id: string) =>
+  apiRequest<void>(`/recurring-rules/${id}`, { method: "DELETE" });
+export const payRecurringRule = (
+  id: string,
+  payload: { amount: string; paid_on: string },
+) =>
+  apiRequest<{ commitment: RecurringItem; transaction: TransactionItem }>(
+    `/recurring-rules/${id}/pay`,
+    {
+      method: "POST",
+      headers: { "Idempotency-Key": crypto.randomUUID() },
+      body: JSON.stringify(payload),
+    },
+  );
+
+export const addGoalContribution = (
+  goalId: string,
+  payload: { amount: string; contributed_on: string; note?: string },
+) =>
+  apiRequest<{ id: string; goal_id: string; amount: string }>(
+    `/goals/${goalId}/contributions`,
+    { method: "POST", body: JSON.stringify(payload) },
+  );
+export const deleteGoal = (id: string) =>
+  apiRequest<void>(`/goals/${id}`, { method: "DELETE" });
+
+export const createGoal = (payload: {
+  name: string;
+  target_amount: string;
+  saved_amount: string;
+  months: number;
+}) =>
+  apiRequest<GoalItem>("/goals", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 export const listRecurringRules = () =>
   apiRequest<RecurringItem[]>("/recurring-rules");
 
@@ -203,6 +398,14 @@ export type AccountItem = {
   account_type: string;
   currency: string;
   opening_balance: string;
+  current_balance: string;
+  institution: string | null;
+  principal_amount: string | null;
+  annual_interest_rate: string | null;
+  started_on: string | null;
+  maturity_on: string | null;
+  tenure_months: number | null;
+  installment_amount: string | null;
 };
 export type CategoryItem = {
   id: string;
@@ -219,7 +422,14 @@ export const createAccountRecord = (payload: {
   name: string;
   account_type: string;
   currency: string;
-  opening_balance: number;
+  opening_balance: string;
+  institution?: string | null;
+  principal_amount?: string | null;
+  annual_interest_rate?: string | null;
+  started_on?: string | null;
+  maturity_on?: string | null;
+  tenure_months?: number | null;
+  installment_amount?: string | null;
 }) =>
   apiRequest<AccountItem>("/accounts", {
     method: "POST",
@@ -233,14 +443,35 @@ export const createCategory = (payload: {
   category_type: "expense" | "income";
   icon?: string;
   color?: string;
-  monthly_budget?: number;
+  monthly_budget?: string | null;
 }) =>
   apiRequest<CategoryItem>("/categories", {
     method: "POST",
     body: JSON.stringify(payload),
   });
+export const updateCategory = (
+  id: string,
+  payload: {
+    name?: string;
+    icon?: string;
+    color?: string;
+    monthly_budget?: string | null;
+  },
+) =>
+  apiRequest<CategoryItem>(`/categories/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
 export const archiveCategory = (id: string) =>
   apiRequest<void>(`/categories/${id}`, { method: "DELETE" });
+export type ReplacementGoal = {
+  target_cost_per_day: string;
+  days_needed: number;
+  reached_on: string;
+  days_remaining: number;
+  progress_percent: number;
+  reached: boolean;
+};
 export type AssetItem = {
   id: string;
   name: string;
@@ -252,18 +483,29 @@ export type AssetItem = {
   status: string;
   age_days: number;
   cost_per_day: string;
+  expected_life_months: number | null;
+  target_cost_per_day: string | null;
+  replacement_goal: ReplacementGoal | null;
 };
-export const listAssets = () => apiRequest<AssetItem[]>("/assets");
-export const createAsset = (payload: {
+export type AssetInput = {
   name: string;
   asset_type: string;
-  purchase_price: number;
+  purchase_price: string;
   purchased_on: string;
   currency: string;
-  notes?: string;
-}) =>
+  notes: string | null;
+  expected_life_months: number | null;
+  target_cost_per_day: string | null;
+};
+export const listAssets = () => apiRequest<AssetItem[]>("/assets");
+export const createAsset = (payload: AssetInput) =>
   apiRequest<AssetItem>("/assets", {
     method: "POST",
+    body: JSON.stringify(payload),
+  });
+export const updateAsset = (id: string, payload: Partial<AssetInput>) =>
+  apiRequest<AssetItem>(`/assets/${id}`, {
+    method: "PATCH",
     body: JSON.stringify(payload),
   });
 export const archiveAsset = (id: string) =>
@@ -281,7 +523,7 @@ export async function exportCurrentUserData(profile: SpendovaUser) {
   ] = await Promise.all([
     listAccounts(),
     listCategories(),
-    apiRequest<TransactionItem[]>("/transactions?limit=200"),
+    listAllTransactions(),
     listBudgets(),
     listGoals(),
     listRecurringRules(),

@@ -1,8 +1,6 @@
 import {
   Area,
   AreaChart,
-  Bar,
-  BarChart,
   CartesianGrid,
   ResponsiveContainer,
   Tooltip,
@@ -10,20 +8,20 @@ import {
   YAxis,
 } from "recharts";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-export type DashboardCategory = { name: string; amount: number };
+export type DashboardCategory = {
+  name: string;
+  amount: number;
+  color?: string | null;
+};
 export type DashboardTransaction = {
   id: string;
   merchant: string;
   detail: string;
+  /** Positive for income, negative for spending; transfers are unsigned. */
   amount: number;
+  transfer?: boolean;
 };
 export type DashboardTrend = {
   month: string;
@@ -67,26 +65,28 @@ export function DashboardContent(props: Props) {
     <div className="space-y-6">
       {props.sample && (
         <div className="flex flex-col gap-3 rounded-2xl border border-primary/20 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="font-semibold">Sample dashboard</p>
-            <p className="text-sm text-muted-foreground">
-              Preview data only—not connected to your account.
-            </p>
-          </div>
+          <p className="font-semibold">Sample dashboard</p>
           <Button onClick={props.onPrimaryAction}>Create your account</Button>
         </div>
       )}
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {props.periodLabel && (
+        <p className="text-sm font-medium text-muted-foreground">
+          Showing {props.periodLabel}
+        </p>
+      )}
+      <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         {[
-          ["Income this month", money(props.income)],
-          ["Spent this month", money(props.spending)],
+          ["Income", money(props.income)],
+          ["Spent", money(props.spending)],
           ["Cash flow", money(props.cashFlow)],
           ["Transactions", String(props.transactionCount)],
         ].map(([label, value]) => (
           <Card key={label}>
-            <CardContent className="p-5">
+            <CardContent className="p-4 sm:p-5">
               <p className="text-sm text-muted-foreground">{label}</p>
-              <p className="money mt-2 text-2xl font-semibold">{value}</p>
+              <p className="money mt-1.5 truncate text-xl font-semibold sm:mt-2 sm:text-2xl">
+                {value}
+              </p>
             </CardContent>
           </Card>
         ))}
@@ -95,7 +95,6 @@ export function DashboardContent(props: Props) {
         <Card>
           <CardHeader>
             <CardTitle>Income and spending trend</CardTitle>
-            <CardDescription>Your six-month cash-flow pattern</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="h-[300px] w-full">
@@ -139,13 +138,11 @@ export function DashboardContent(props: Props) {
       )}
       {empty ? (
         <Card>
-          <CardContent className="flex min-h-72 flex-col items-center justify-center p-8 text-center">
-            <h2 className="text-xl font-semibold">Your dashboard is ready</h2>
-            <p className="mt-2 max-w-md text-sm text-muted-foreground">
-              Add your first transaction to build spending insights and charts.
-              Sample information is never mixed with your personal data.
-            </p>
-            <Button className="mt-5" onClick={props.onPrimaryAction}>
+          <CardContent className="flex min-h-56 flex-col items-center justify-center p-8 text-center">
+            <h2 className="text-lg font-semibold">
+              No transactions for {props.periodLabel ?? "this month"}
+            </h2>
+            <Button className="mt-4" onClick={props.onPrimaryAction}>
               Add first transaction
             </Button>
           </CardContent>
@@ -155,49 +152,48 @@ export function DashboardContent(props: Props) {
           <Card>
             <CardHeader>
               <CardTitle>Spending by category</CardTitle>
-              <CardDescription>
-                Actual expenses for the current month
-              </CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="h-[280px] w-full sm:h-[340px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={props.categories}
-                    layout="vertical"
-                    margin={{ left: 8, right: 24 }}
-                  >
-                    <CartesianGrid horizontal={false} strokeDasharray="3 3" />
-                    <XAxis
-                      type="number"
-                      tickFormatter={(value) => money(Number(value))}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <YAxis
-                      type="category"
-                      dataKey="name"
-                      width={92}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <Tooltip
-                      formatter={(value) => [money(Number(value)), "Spent"]}
-                    />
-                    <Bar
-                      dataKey="amount"
-                      fill="var(--primary)"
-                      radius={[0, 6, 6, 0]}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+            <CardContent className="space-y-4">
+              {props.categories.length ? (
+                props.categories.map((item) => {
+                  const share = props.spending
+                    ? Math.round((item.amount / props.spending) * 100)
+                    : 0;
+                  return (
+                    <div key={item.name} className="space-y-1.5">
+                      <div className="flex items-baseline justify-between gap-3 text-sm">
+                        <span className="truncate font-medium">
+                          {item.name}
+                        </span>
+                        <span className="money shrink-0">
+                          {money(item.amount)}
+                          <span className="ml-1.5 text-xs text-muted-foreground">
+                            {share}%
+                          </span>
+                        </span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="h-full rounded-full"
+                          style={{
+                            width: `${Math.max(share, 2)}%`,
+                            backgroundColor: item.color ?? "var(--primary)",
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="py-6 text-center text-sm text-muted-foreground">
+                  No categorised spending
+                </p>
+              )}
             </CardContent>
           </Card>
-          <Card>
+          <Card className="order-first xl:order-none">
             <CardHeader>
               <CardTitle>Recent transactions</CardTitle>
-              <CardDescription>Latest cleared activity</CardDescription>
             </CardHeader>
             <CardContent>
               {props.transactions.map((item) => (
@@ -214,9 +210,9 @@ export function DashboardContent(props: Props) {
                     </p>
                   </div>
                   <p
-                    className={`money text-sm ${item.amount > 0 ? "text-emerald-600" : ""}`}
+                    className={`money text-sm font-medium ${!item.transfer && item.amount > 0 ? "text-emerald-600" : ""}`}
                   >
-                    {item.amount > 0 ? "+" : "−"}
+                    {item.transfer ? "" : item.amount > 0 ? "+" : "−"}
                     {money(Math.abs(item.amount))}
                   </p>
                 </div>
@@ -232,7 +228,6 @@ export function DashboardContent(props: Props) {
           <Card>
             <CardHeader>
               <CardTitle>Budget health</CardTitle>
-              <CardDescription>Monthly category limits</CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
               {props.budgets?.map((item) => {
@@ -262,7 +257,6 @@ export function DashboardContent(props: Props) {
           <Card>
             <CardHeader>
               <CardTitle>Accounts</CardTitle>
-              <CardDescription>Balances across your money</CardDescription>
             </CardHeader>
             <CardContent className="divide-y">
               {props.accounts?.map((item) => (
@@ -286,9 +280,6 @@ export function DashboardContent(props: Props) {
           <Card>
             <CardHeader>
               <CardTitle>Savings goals</CardTitle>
-              <CardDescription>
-                Progress toward planned purchases
-              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
               {props.goals?.map((item) => {

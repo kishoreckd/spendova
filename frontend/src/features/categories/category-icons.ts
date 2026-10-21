@@ -2,6 +2,7 @@ import {
   Baby,
   Banknote,
   BriefcaseBusiness,
+  CalendarClock,
   Car,
   CircleDollarSign,
   Clapperboard,
@@ -11,6 +12,7 @@ import {
   GraduationCap,
   HeartPulse,
   House,
+  Landmark,
   PawPrint,
   Plane,
   Plug,
@@ -19,6 +21,7 @@ import {
   ShoppingBag,
   ShoppingBasket,
   Smartphone,
+  TrendingUp,
   Utensils,
   WalletCards,
   type LucideIcon,
@@ -47,6 +50,9 @@ export const categoryIcons: Array<{
   { value: "coffee", label: "Coffee", icon: Coffee },
   { value: "smartphone", label: "Phone", icon: Smartphone },
   { value: "shield-check", label: "Insurance", icon: ShieldCheck },
+  { value: "calendar-clock", label: "Subscriptions", icon: CalendarClock },
+  { value: "landmark", label: "Taxes and pension", icon: Landmark },
+  { value: "trending-up", label: "Investing income", icon: TrendingUp },
   { value: "briefcase-business", label: "Business", icon: BriefcaseBusiness },
   { value: "wallet-cards", label: "Salary", icon: WalletCards },
   { value: "banknote", label: "Money", icon: Banknote },
@@ -56,3 +62,59 @@ export const categoryIcons: Array<{
 export const categoryIconMap = new Map(
   categoryIcons.map((item) => [item.value, item.icon]),
 );
+
+export const categoryColors = [
+  "#059669",
+  "#0284c7",
+  "#7c3aed",
+  "#d97706",
+  "#e11d48",
+  "#db2777",
+  "#475569",
+  "#0891b2",
+  "#65a30d",
+  "#ea580c",
+];
+
+const keywordIcons: Array<[RegExp, string]> = [
+  [/rent|home|house|maintenance/, "house"],
+  [/grocer|supermarket|vegetable/, "shopping-basket"],
+  [/food|dining|restaurant|lunch|dinner|snack|swiggy|zomato/, "utensils"],
+  [
+    /fuel|petrol|diesel|uber|ola|taxi|cab|bus|metro|train|transport|parking/,
+    "car",
+  ],
+  [/electric|water|gas|internet|wifi|broadband|utility|bill/, "plug"],
+  [/doctor|medic|pharma|hospital|health|dental/, "heart-pulse"],
+  [
+    /movie|netflix|prime|spotify|ott|game|entertain|subscription/,
+    "clapperboard",
+  ],
+  [/school|tuition|course|book|education|college/, "graduation-cap"],
+  [/shop|amazon|flipkart|mall/, "shopping-bag"],
+  [/travel|flight|hotel|trip|holiday|vacation/, "plane"],
+  [/gift|donat|charity/, "gift"],
+  [/cloth|apparel|fashion|shoe/, "shirt"],
+  [/kid|child|baby|daycare/, "baby"],
+  [/pet|dog|cat|vet/, "paw-print"],
+  [/gym|fitness|sport|yoga/, "dumbbell"],
+  [/coffee|tea|cafe/, "coffee"],
+  [/phone|mobile|recharge/, "smartphone"],
+  [/insur/, "shield-check"],
+  [/business|freelanc|client|consult/, "briefcase-business"],
+  [/salary|payroll|wage/, "wallet-cards"],
+];
+
+/** Picks a fitting icon for a newly typed category name. */
+export function suggestCategoryIcon(name: string, type: "expense" | "income") {
+  const lower = name.toLowerCase();
+  return (
+    keywordIcons.find(([pattern]) => pattern.test(lower))?.[1] ??
+    (type === "income" ? "circle-dollar-sign" : "banknote")
+  );
+}
+
+/** Rotates through the palette so neighbouring categories stay distinct. */
+export function nextCategoryColor(existingCount: number) {
+  return categoryColors[existingCount % categoryColors.length];
+}

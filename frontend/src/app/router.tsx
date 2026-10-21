@@ -10,6 +10,9 @@ const Reports = lazy(() => import("@/features/reports/page"));
 const SignIn = lazy(() => import("@/features/auth/sign-in-page"));
 const Onboarding = lazy(() => import("@/features/auth/onboarding-page"));
 const VerifyEmail = lazy(() => import("@/features/auth/verify-email-page"));
+const ForgotPassword = lazy(
+  () => import("@/features/auth/forgot-password-page"),
+);
 const Transactions = lazy(() => import("@/features/transactions/page"));
 const Planning = lazy(() => import("@/features/planning/page"));
 const More = lazy(() => import("@/features/more/page"));
@@ -92,6 +95,7 @@ function FullPageLoading() {
 export const router = createBrowserRouter([
   { path: "/sign-in", element: <SignInRoute /> },
   { path: "/demo", element: suspense(<Demo />) },
+  { path: "/forgot-password", element: suspense(<ForgotPassword />) },
   { path: "/verify-email", element: <VerificationRoute /> },
   { path: "/onboarding", element: <OnboardingRoute /> },
   {

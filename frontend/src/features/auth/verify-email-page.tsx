@@ -10,9 +10,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useAuth } from "@/features/auth/auth-context";
+import { controlProps, notifyError, notifySuccess } from "@/lib/forms";
 
 export default function VerifyEmailPage() {
   const location = useLocation();
@@ -24,14 +25,21 @@ export default function VerifyEmailPage() {
   )?.developmentCode;
   const [developmentCode, setDevelopmentCode] = useState(initialCode ?? null);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
+  const [resending, setResending] = useState(false);
   const [error, setError] = useState("");
 
   async function verify(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const code = String(
+      new FormData(event.currentTarget).get("code") ?? "",
+    ).trim();
+    if (!/^\d{6}$/.test(code)) {
+      setError("Enter the 6-digit code");
+      document.getElementById("code")?.focus();
+      return;
+    }
     setSaving(true);
     setError("");
-    const code = String(new FormData(event.currentTarget).get("code") ?? "");
     try {
       const updated = await verifyEmailCode(code);
       navigate(updated.onboarding_completed ? "/" : "/onboarding", {
@@ -48,15 +56,15 @@ export default function VerifyEmailPage() {
 
   async function resend() {
     setError("");
-    setMessage("");
+    setResending(true);
     try {
       const code = await sendEmailVerificationCode();
       setDevelopmentCode(code);
-      setMessage("A new verification code was sent.");
+      notifySuccess("New code sent", profile?.email);
     } catch (reason) {
-      setError(
-        reason instanceof Error ? reason.message : "Could not send a new code",
-      );
+      notifyError(reason, "Couldn't send a new code");
+    } finally {
+      setResending(false);
     }
   }
 
@@ -93,38 +101,32 @@ export default function VerifyEmailPage() {
               <strong>Development code:</strong> {developmentCode}
             </div>
           )}
-          <form className="space-y-4" onSubmit={verify}>
-            <div className="space-y-2">
-              <Label htmlFor="code" className="sr-only">
-                Verification code
-              </Label>
+          <form noValidate className="space-y-4" onSubmit={verify}>
+            <Field
+              id="code"
+              label={<span className="sr-only">Verification code</span>}
+              error={error}
+            >
               <Input
-                id="code"
+                {...controlProps("code", error)}
                 name="code"
                 inputMode="numeric"
                 autoComplete="one-time-code"
-                pattern="[0-9]{6}"
                 maxLength={6}
                 autoFocus
                 placeholder="000000"
-                className="h-14 rounded-2xl text-center font-mono text-2xl tracking-[0.55em]"
-                required
+                onChange={() => setError("")}
+                className="h-14 rounded-2xl text-center font-mono text-2xl tracking-[0.55em] sm:h-14"
               />
-            </div>
-            <Button className="h-11 w-full rounded-xl" disabled={saving}>
+            </Field>
+            <Button
+              type="submit"
+              className="h-11 w-full rounded-xl sm:h-11"
+              loading={saving}
+            >
               {saving ? "Verifying…" : "Verify email"}
             </Button>
           </form>
-          {message && (
-            <p role="status" className="text-sm text-primary">
-              {message}
-            </p>
-          )}
-          {error && (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
-          )}
           <div className="flex flex-col-reverse gap-1 min-[380px]:flex-row min-[380px]:justify-between">
             <Button
               variant="ghost"
@@ -136,6 +138,7 @@ export default function VerifyEmailPage() {
             <Button
               variant="ghost"
               className="rounded-xl"
+              loading={resending}
               onClick={() => void resend()}
             >
               Resend code

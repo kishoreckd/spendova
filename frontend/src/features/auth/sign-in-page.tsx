@@ -1,29 +1,53 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
-import { AlertCircle, ChartNoAxesCombined, ShieldCheck } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { ChartNoAxesCombined, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Field, FormAlert } from "@/components/ui/field";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useAuth } from "@/features/auth/auth-context";
+import { controlProps } from "@/lib/forms";
 
 type Mode = "sign-in" | "sign-up";
+type SignInErrors = Partial<Record<"name" | "email" | "password", string>>;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function validateSignIn(
+  mode: Mode,
+  values: { name: string; email: string; password: string },
+) {
+  const errors: SignInErrors = {};
+  if (mode === "sign-up" && !values.name) errors.name = "Enter your name";
+  if (!values.email) errors.email = "Enter your email";
+  else if (!EMAIL_PATTERN.test(values.email))
+    errors.email = "Enter a valid email, like name@example.com";
+  if (!values.password) errors.password = "Enter your password";
+  else if (mode === "sign-up" && values.password.length < 8)
+    errors.password = "Use at least 8 characters";
+  return errors;
+}
 
 export default function SignInPage() {
   const navigate = useNavigate();
-  const { signInWithEmail, signUpWithEmail, signInWithGoogle, resetPassword } =
-    useAuth();
+  const location = useLocation();
+  const prefilledEmail =
+    (location.state as { email?: string } | null)?.email ?? "";
+  const { signInWithEmail, signUpWithEmail, signInWithGoogle } = useAuth();
   const [mode, setMode] = useState<Mode>("sign-in");
-  const [submitting, setSubmitting] = useState(false);
+  const [submitting, setSubmitting] = useState<"email" | "google" | null>(null);
   const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<SignInErrors>({});
+
+  function clearField(field: keyof SignInErrors) {
+    setFieldErrors((current) => ({ ...current, [field]: undefined }));
+  }
+
+  function switchMode(next: Mode) {
+    setMode(next);
+    setError("");
+    setFieldErrors({});
+  }
 
   function destination(profile: {
     email_verified: boolean;
@@ -35,33 +59,50 @@ export default function SignInPage() {
 
   async function submitEmail(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setSubmitting(true);
-    setError("");
-    setMessage("");
     const data = new FormData(event.currentTarget);
-    const email = String(data.get("email") ?? "").trim();
-    const password = String(data.get("password") ?? "");
+    const values = {
+      name: String(data.get("name") ?? "").trim(),
+      email: String(data.get("email") ?? "").trim(),
+      password: String(data.get("password") ?? ""),
+    };
+    const errors = validateSignIn(mode, values);
+    setFieldErrors(errors);
+    setError("");
+    const firstInvalid = Object.keys(errors)[0];
+    if (firstInvalid) {
+      document.getElementById(firstInvalid)?.focus();
+      return;
+    }
+    setSubmitting("email");
     try {
       if (mode === "sign-up") {
-        const name = String(data.get("name") ?? "").trim();
-        const developmentCode = await signUpWithEmail(name, email, password);
+        const developmentCode = await signUpWithEmail(
+          values.name,
+          values.email,
+          values.password,
+        );
         navigate("/verify-email", {
           replace: true,
           state: { developmentCode },
         });
       } else {
-        const profile = await signInWithEmail(email, password);
+        const profile = await signInWithEmail(values.email, values.password);
         navigate(destination(profile), { replace: true });
       }
     } catch (reason) {
-      setError(friendlyError(reason));
+      const code = firebaseCode(reason);
+      if (code === "auth/email-already-in-use" || code === "auth/invalid-email")
+        setFieldErrors({ email: friendlyError(reason) });
+      else if (code === "auth/weak-password")
+        setFieldErrors({ password: friendlyError(reason) });
+      else setError(friendlyError(reason));
     } finally {
-      setSubmitting(false);
+      setSubmitting(null);
     }
   }
 
   async function continueWithGoogle() {
-    setSubmitting(true);
+    setSubmitting("google");
     setError("");
     try {
       const profile = await signInWithGoogle();
@@ -70,25 +111,16 @@ export default function SignInPage() {
       if (firebaseCode(reason) !== "auth/popup-closed-by-user")
         setError(friendlyError(reason));
     } finally {
-      setSubmitting(false);
+      setSubmitting(null);
     }
   }
 
-  async function forgotPassword(event: FormEvent<HTMLButtonElement>) {
+  function forgotPassword(event: FormEvent<HTMLButtonElement>) {
     const form = event.currentTarget.form;
     const email = String(
       new FormData(form ?? undefined).get("email") ?? "",
     ).trim();
-    if (!email) {
-      setError("Enter your email address first.");
-      return;
-    }
-    try {
-      await resetPassword(email);
-      setMessage("Password reset email sent. Check your inbox.");
-    } catch (reason) {
-      setError(friendlyError(reason));
-    }
+    navigate("/forgot-password", { state: { email } });
   }
 
   return (
@@ -148,51 +180,54 @@ export default function SignInPage() {
               <CardTitle className="text-2xl">
                 {mode === "sign-in" ? "Welcome back" : "Create your account"}
               </CardTitle>
-              <CardDescription>
-                {mode === "sign-in"
-                  ? "Sign in to your financial workspace."
-                  : "Verify your email before entering Spendova."}
-              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
               <div className="grid grid-cols-2 rounded-2xl bg-muted p-1.5">
                 <Button
                   type="button"
                   variant={mode === "sign-in" ? "default" : "ghost"}
-                  onClick={() => setMode("sign-in")}
+                  onClick={() => switchMode("sign-in")}
                 >
                   Sign in
                 </Button>
                 <Button
                   type="button"
                   variant={mode === "sign-up" ? "default" : "ghost"}
-                  onClick={() => setMode("sign-up")}
+                  onClick={() => switchMode("sign-up")}
                 >
                   Sign up
                 </Button>
               </div>
-              <form className="space-y-4" onSubmit={submitEmail}>
+              <form noValidate className="space-y-4" onSubmit={submitEmail}>
                 {mode === "sign-up" && (
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Full name</Label>
-                    <Input id="name" name="name" autoComplete="name" required />
-                  </div>
+                  <Field id="name" label="Full name" error={fieldErrors.name}>
+                    <Input
+                      {...controlProps("name", fieldErrors.name)}
+                      className="h-11 rounded-xl sm:h-11"
+                      name="name"
+                      autoComplete="name"
+                      onChange={() => clearField("name")}
+                    />
+                  </Field>
                 )}
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
+                <Field id="email" label="Email" error={fieldErrors.email}>
                   <Input
-                    className="h-11 rounded-xl"
-                    id="email"
+                    {...controlProps("email", fieldErrors.email)}
+                    className="h-11 rounded-xl sm:h-11"
                     name="email"
                     type="email"
+                    inputMode="email"
                     autoComplete="email"
-                    required
+                    defaultValue={prefilledEmail}
+                    onChange={() => clearField("email")}
                   />
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="password">Password</Label>
-                    {mode === "sign-in" && (
+                </Field>
+                <Field
+                  id="password"
+                  label="Password"
+                  error={fieldErrors.password}
+                  action={
+                    mode === "sign-in" && (
                       <button
                         type="button"
                         className="text-xs text-primary hover:underline"
@@ -200,31 +235,31 @@ export default function SignInPage() {
                       >
                         Forgot password?
                       </button>
-                    )}
-                  </div>
+                    )
+                  }
+                >
                   <Input
-                    className="h-11 rounded-xl"
-                    id="password"
+                    {...controlProps("password", fieldErrors.password)}
+                    className="h-11 rounded-xl sm:h-11"
                     name="password"
                     type="password"
                     autoComplete={
                       mode === "sign-up" ? "new-password" : "current-password"
                     }
-                    minLength={8}
-                    required
+                    onChange={() => clearField("password")}
                   />
-                  {mode === "sign-up" && (
-                    <p className="text-xs text-muted-foreground">
-                      Use at least 8 characters.
-                    </p>
-                  )}
-                </div>
+                </Field>
+                <FormAlert>{error}</FormAlert>
                 <Button
-                  className="h-11 w-full rounded-xl"
-                  disabled={submitting}
+                  type="submit"
+                  className="h-11 w-full rounded-xl sm:h-11"
+                  loading={submitting === "email"}
+                  disabled={submitting === "google"}
                 >
-                  {submitting
-                    ? "Please wait…"
+                  {submitting === "email"
+                    ? mode === "sign-in"
+                      ? "Signing in…"
+                      : "Creating account…"
                     : mode === "sign-in"
                       ? "Sign in"
                       : "Create account"}
@@ -237,8 +272,9 @@ export default function SignInPage() {
               </div>
               <Button
                 variant="outline"
-                className="h-11 w-full rounded-xl"
-                disabled={submitting}
+                className="h-11 w-full rounded-xl sm:h-11"
+                loading={submitting === "google"}
+                disabled={submitting === "email"}
                 onClick={continueWithGoogle}
               >
                 <svg aria-hidden="true" viewBox="0 0 24 24" className="size-4">
@@ -268,23 +304,6 @@ export default function SignInPage() {
               >
                 Preview sample dashboard
               </Button>
-              {message && (
-                <p
-                  role="status"
-                  className="rounded-lg bg-primary/10 p-3 text-sm text-primary"
-                >
-                  {message}
-                </p>
-              )}
-              {error && (
-                <p
-                  role="alert"
-                  className="flex gap-2 rounded-lg bg-destructive/10 p-3 text-sm text-destructive"
-                >
-                  <AlertCircle className="mt-0.5 size-4 shrink-0" />
-                  {error}
-                </p>
-              )}
             </CardContent>
           </Card>
         </section>

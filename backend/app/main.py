@@ -5,7 +5,7 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
-from .api import accounts, assets, auth, budgets, categories, dashboard, goals, recurring, transactions
+from .api import accounts, assets, auth, budgets, categories, dashboard, goals, password_reset, recurring, transactions
 from .core.config import get_settings
 from .core.exceptions import http_exception_handler, request_validation_exception_handler, unhandled_exception_handler
 from .auth import get_verified_current_user
@@ -42,6 +42,7 @@ app.add_exception_handler(RequestValidationError, request_validation_exception_h
 app.add_exception_handler(Exception, unhandled_exception_handler)
 
 app.include_router(auth.router, prefix="/api/v1")
+app.include_router(password_reset.router, prefix="/api/v1")
 for router in (
     accounts.router,
     categories.router,

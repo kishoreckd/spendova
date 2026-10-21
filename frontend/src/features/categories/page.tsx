@@ -1,8 +1,13 @@
-import { useCallback, useEffect, useState } from "react";
-import { Archive, Plus, Tags } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { createElement, useEffect, useMemo, useState } from "react";
+import { Controller, useForm, useWatch } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Archive, Check, Plus, Tags } from "lucide-react";
+import { z } from "zod";
+import { cn } from "cn";
+import { PageActions } from "@/app/page-actions";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { MoneyInput } from "@/components/money-input";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -10,257 +15,502 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
+import { Field, FormAlert } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useMoney } from "@/hooks/use-money";
 import {
   archiveCategory,
   createCategory,
-  listCategories,
+  updateCategory,
   type CategoryItem,
 } from "@/lib/api";
-import { categoryIconMap, categoryIcons } from "./category-icons";
+import {
+  applyServerErrors,
+  controlProps,
+  notifySuccess,
+  optionalMoney,
+  requiredText,
+} from "@/lib/forms";
+import {
+  categoryColors,
+  categoryIconMap,
+  categoryIcons,
+  nextCategoryColor,
+  suggestCategoryIcon,
+} from "./category-icons";
+import { CATEGORIES_CHANGED, useCategories } from "./use-categories";
 
-const colors = [
-  "#059669",
-  "#0284c7",
-  "#7c3aed",
-  "#d97706",
-  "#e11d48",
-  "#db2777",
-  "#475569",
-  "#0891b2",
-];
+type CategoryType = "expense" | "income";
+
+const schema = z.object({
+  name: requiredText("Give the category a name", 80),
+  type: z.enum(["expense", "income"]),
+  icon: z.string().min(1, "Choose an icon"),
+  color: z.string().min(1, "Choose a colour"),
+  budget: optionalMoney(),
+});
+type Values = z.input<typeof schema>;
+
+const serverFields = {
+  name: "name",
+  category_type: "type",
+  icon: "icon",
+  color: "color",
+  monthly_budget: "budget",
+} as const;
 
 export default function CategoriesPage() {
-  const [items, setItems] = useState<CategoryItem[]>([]);
-  const [open, setOpen] = useState(false);
-  const [type, setType] = useState<"expense" | "income">("expense");
-  const [color, setColor] = useState(colors[0]);
-  const [icon, setIcon] = useState("shopping-basket");
-  const [error, setError] = useState("");
-  const [saving, setSaving] = useState(false);
-  const load = useCallback(
-    () =>
-      listCategories()
-        .then(setItems)
-        .catch((reason) =>
-          setError(
-            reason instanceof Error
-              ? reason.message
-              : "Could not load categories",
-          ),
-        ),
-    [],
+  const currency = useMoney();
+  const categories = useCategories();
+  const [tab, setTab] = useState<CategoryType>("expense");
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<CategoryItem | null>(null);
+  const [archiving, setArchiving] = useState<CategoryItem | null>(null);
+
+  function openForm(category: CategoryItem | null) {
+    setEditing(category);
+    setFormOpen(true);
+  }
+  const counts = useMemo(
+    () => ({
+      expense: categories.items.filter(
+        (item) => item.category_type === "expense",
+      ).length,
+      income: categories.items.filter((item) => item.category_type === "income")
+        .length,
+    }),
+    [categories.items],
   );
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  async function submit(data: FormData) {
-    setSaving(true);
-    setError("");
-    try {
-      await createCategory({
-        name: String(data.get("name")).trim(),
-        category_type: type,
-        icon,
-        color,
-        monthly_budget: Number(data.get("budget") || 0),
-      });
-      await load();
-      window.dispatchEvent(new CustomEvent("spendova:categories"));
-      setOpen(false);
-    } catch (reason) {
-      setError(
-        reason instanceof Error ? reason.message : "Could not create category",
-      );
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function archive(id: string) {
-    await archiveCategory(id);
-    await load();
-    window.dispatchEvent(new CustomEvent("spendova:categories"));
-  }
+  const visible = categories.items.filter((item) => item.category_type === tab);
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-semibold">Categories</h2>
-          <p className="text-sm text-muted-foreground">
-            Create categories that appear in transactions, budgets, and reports.
-          </p>
+      <PageActions>
+        <Button aria-label="New category" onClick={() => openForm(null)}>
+          <Plus />
+          <span className="hidden sm:inline">New category</span>
+        </Button>
+      </PageActions>
+
+      <Tabs
+        value={tab}
+        onValueChange={(value) => setTab(value as CategoryType)}
+      >
+        <TabsList className="grid w-full max-w-sm grid-cols-2">
+          <TabsTrigger value="expense">Expenses · {counts.expense}</TabsTrigger>
+          <TabsTrigger value="income">Income · {counts.income}</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      {categories.error && (
+        <div className="space-y-3">
+          <FormAlert>{categories.error}</FormAlert>
+          <Button variant="outline" onClick={() => void categories.reload()}>
+            Try again
+          </Button>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger render={<Button />}>
-            <Plus />
-            Add category
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add category</DialogTitle>
-              <DialogDescription>
-                Create an expense or income category for your workspace.
-              </DialogDescription>
-            </DialogHeader>
-            <form action={submit} className="space-y-4">
-              <div className="space-y-2">
-                <Label>Name</Label>
-                <Input name="name" required placeholder="e.g. Education" />
-              </div>
-              <div className="space-y-2">
-                <Label>Icon</Label>
-                <div className="grid max-h-40 grid-cols-6 gap-2 overflow-y-auto rounded-xl border p-2 sm:grid-cols-8">
+      )}
+
+      {categories.loading ? (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+          {Array.from({ length: 8 }, (_, index) => (
+            <div
+              key={index}
+              className="h-32 animate-pulse rounded-2xl bg-muted"
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+          {visible.map((item) => {
+            const Icon = categoryIconMap.get(item.icon ?? "") ?? Tags;
+            const color = item.color ?? categoryColors[0];
+            const budget = Number(item.monthly_budget ?? 0);
+            return (
+              <button
+                key={item.id}
+                type="button"
+                aria-label={`Edit ${item.name}`}
+                onClick={() => openForm(item)}
+                className="flex min-h-32 flex-col gap-3 rounded-2xl border bg-card p-4 text-left outline-none transition active:scale-[.98] hover:border-primary/40 hover:shadow-sm focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                <span
+                  className="grid size-11 place-items-center rounded-full"
+                  style={{
+                    color,
+                    backgroundColor: `color-mix(in oklch, ${color} 15%, transparent)`,
+                  }}
+                >
+                  <Icon className="size-5" />
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{item.name}</p>
+                  {budget > 0 && (
+                    <p className="money mt-0.5 text-xs text-muted-foreground">
+                      {currency.format(budget, 0)} / month
+                    </p>
+                  )}
+                </div>
+              </button>
+            );
+          })}
+          <button
+            type="button"
+            onClick={() => openForm(null)}
+            className="flex min-h-32 flex-col items-center justify-center gap-2 rounded-2xl border border-dashed p-4 text-muted-foreground transition hover:border-primary/50 hover:text-primary"
+          >
+            <span className="grid size-11 place-items-center rounded-full bg-muted">
+              <Plus className="size-5" />
+            </span>
+            <span className="text-sm font-medium">
+              New {tab === "expense" ? "expense" : "income"} category
+            </span>
+          </button>
+        </div>
+      )}
+
+      <CategoryFormDialog
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        category={editing}
+        defaultType={tab}
+        existingCount={categories.items.length}
+        onSaved={(saved) => {
+          setTab(saved.category_type);
+          window.dispatchEvent(new CustomEvent(CATEGORIES_CHANGED));
+        }}
+        onArchive={(category) => {
+          setFormOpen(false);
+          setArchiving(category);
+        }}
+      />
+      <ConfirmDialog
+        open={!!archiving}
+        onOpenChange={(open) => !open && setArchiving(null)}
+        title={`Archive ${archiving?.name ?? "this category"}?`}
+        description="It disappears from pickers and new budgets. Past transactions keep their category in reports."
+        confirmLabel="Archive category"
+        onConfirm={async () => {
+          if (!archiving) return;
+          await archiveCategory(archiving.id);
+          window.dispatchEvent(new CustomEvent(CATEGORIES_CHANGED));
+          notifySuccess(`${archiving.name} archived`);
+        }}
+      />
+    </div>
+  );
+}
+
+function CategoryFormDialog({
+  open,
+  onOpenChange,
+  category,
+  defaultType,
+  existingCount,
+  onSaved,
+  onArchive,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  /** The category to edit; null creates a new one. */
+  category: CategoryItem | null;
+  defaultType: CategoryType;
+  existingCount: number;
+  onSaved: (category: CategoryItem) => void;
+  onArchive: (category: CategoryItem) => void;
+}) {
+  const currency = useMoney();
+  const [formError, setFormError] = useState("");
+  const [iconChosen, setIconChosen] = useState(false);
+  const form = useForm<Values>({
+    resolver: zodResolver(schema),
+    mode: "onTouched",
+    defaultValues: {
+      name: "",
+      type: defaultType,
+      icon: "banknote",
+      color: categoryColors[0],
+      budget: "",
+    },
+  });
+  const { errors, isSubmitting } = form.formState;
+  const values = useWatch({ control: form.control });
+
+  useEffect(() => {
+    if (!open) return;
+    form.reset(
+      category
+        ? {
+            name: category.name,
+            type: category.category_type,
+            icon: category.icon ?? "banknote",
+            color: category.color ?? categoryColors[0],
+            budget: Number(category.monthly_budget ?? 0)
+              ? String(Number(category.monthly_budget))
+              : "",
+          }
+        : {
+            name: "",
+            type: defaultType,
+            icon: defaultType === "income" ? "circle-dollar-sign" : "banknote",
+            color: nextCategoryColor(existingCount),
+            budget: "",
+          },
+    );
+  }, [open, category, defaultType, existingCount, form]);
+
+  function changeOpen(next: boolean) {
+    if (!next) {
+      setFormError("");
+      setIconChosen(false);
+    }
+    onOpenChange(next);
+  }
+
+  // Until someone picks an icon, keep suggesting one from the name.
+  useEffect(() => {
+    if (iconChosen || category || !values.name) return;
+    form.setValue(
+      "icon",
+      suggestCategoryIcon(values.name, values.type ?? "expense"),
+    );
+  }, [values.name, values.type, iconChosen, category, form]);
+
+  async function save(input: Values) {
+    setFormError("");
+    const parsed = schema.parse(input);
+    const details = {
+      name: parsed.name,
+      icon: parsed.icon,
+      color: parsed.color,
+      monthly_budget:
+        parsed.type === "expense" && parsed.budget ? parsed.budget : null,
+    };
+    try {
+      const saved = category
+        ? await updateCategory(category.id, details)
+        : await createCategory({ ...details, category_type: parsed.type });
+      notifySuccess(category ? `${saved.name} updated` : `${saved.name} added`);
+      onSaved(saved);
+      changeOpen(false);
+    } catch (reason) {
+      setFormError(
+        applyServerErrors(
+          reason,
+          form.setError,
+          serverFields,
+          "Could not save this category.",
+        ),
+      );
+    }
+  }
+
+  const previewIcon = categoryIconMap.get(values.icon ?? "") ?? Tags;
+  const color = values.color ?? categoryColors[0];
+
+  return (
+    <Dialog open={open} onOpenChange={changeOpen}>
+      <DialogContent className="gap-5 sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="text-lg">
+            {category ? "Edit category" : "New category"}
+          </DialogTitle>
+          <DialogDescription className="sr-only">
+            Category name, type, icon, and colour
+          </DialogDescription>
+        </DialogHeader>
+        <form
+          noValidate
+          className="space-y-5"
+          onSubmit={form.handleSubmit(save)}
+        >
+          <div
+            className="flex items-center gap-4 rounded-2xl border bg-muted/30 p-4"
+            aria-hidden
+          >
+            <span
+              className="grid size-14 shrink-0 place-items-center rounded-full transition-colors"
+              style={{
+                color,
+                backgroundColor: `color-mix(in oklch, ${color} 16%, transparent)`,
+              }}
+            >
+              {createElement(previewIcon, { className: "size-6" })}
+            </span>
+            <div className="min-w-0">
+              <p className="truncate font-semibold">
+                {values.name?.trim() || "Category name"}
+              </p>
+              <p className="text-xs capitalize text-muted-foreground">
+                {values.type} category
+              </p>
+            </div>
+          </div>
+
+          <Field id="category-name" label="Name" error={errors.name?.message}>
+            <Input
+              {...controlProps("category-name", errors.name?.message)}
+              {...form.register("name")}
+              autoComplete="off"
+              placeholder="e.g. Petrol, Netflix, Rent"
+            />
+          </Field>
+
+          {!category && (
+            <Field
+              id="category-type"
+              label="Used for"
+              error={errors.type?.message}
+            >
+              <Controller
+                control={form.control}
+                name="type"
+                render={({ field }) => (
+                  <Tabs value={field.value} onValueChange={field.onChange}>
+                    <TabsList
+                      id="category-type"
+                      className="grid w-full grid-cols-2"
+                    >
+                      <TabsTrigger value="expense">Money out</TabsTrigger>
+                      <TabsTrigger value="income">Money in</TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                )}
+              />
+            </Field>
+          )}
+
+          <Field id="category-icon" label="Icon" error={errors.icon?.message}>
+            <Controller
+              control={form.control}
+              name="icon"
+              render={({ field }) => (
+                <div
+                  id="category-icon"
+                  role="group"
+                  className="grid grid-cols-6 gap-2 sm:grid-cols-8"
+                >
                   {categoryIcons.map((item) => {
                     const Icon = item.icon;
+                    const selected = field.value === item.value;
                     return (
                       <button
                         key={item.value}
                         type="button"
                         title={item.label}
                         aria-label={item.label}
-                        aria-pressed={icon === item.value}
-                        onClick={() => setIcon(item.value)}
-                        className={`grid aspect-square place-items-center rounded-lg transition hover:bg-muted ${icon === item.value ? "bg-primary text-primary-foreground ring-2 ring-primary ring-offset-2" : "text-muted-foreground"}`}
+                        aria-pressed={selected}
+                        onClick={() => {
+                          field.onChange(item.value);
+                          setIconChosen(true);
+                        }}
+                        className={cn(
+                          "grid aspect-square place-items-center rounded-xl border outline-none transition hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50",
+                          selected
+                            ? "border-transparent text-white"
+                            : "text-muted-foreground",
+                        )}
+                        style={
+                          selected ? { backgroundColor: color } : undefined
+                        }
                       >
                         <Icon className="size-5" />
                       </button>
                     );
                   })}
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Selected:{" "}
-                  {categoryIcons.find((item) => item.value === icon)?.label}
-                </p>
-              </div>
-              <div className="space-y-2">
-                <Label>Type</Label>
-                <Select
-                  value={type}
-                  onValueChange={(value) =>
-                    value && setType(value as "expense" | "income")
-                  }
+              )}
+            />
+          </Field>
+
+          <Field
+            id="category-color"
+            label="Colour"
+            error={errors.color?.message}
+          >
+            <Controller
+              control={form.control}
+              name="color"
+              render={({ field }) => (
+                <div
+                  id="category-color"
+                  role="group"
+                  className="flex flex-wrap gap-2.5"
                 >
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="expense">Expense</SelectItem>
-                    <SelectItem value="income">Income</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Monthly budget (optional)</Label>
-                <Input name="budget" type="number" min="0" placeholder="0" />
-              </div>
-              <div className="space-y-2">
-                <Label>Color</Label>
-                <div className="flex flex-wrap gap-2">
-                  {colors.map((value) => (
+                  {categoryColors.map((value) => (
                     <button
                       key={value}
                       type="button"
-                      aria-label={`Choose ${value}`}
-                      onClick={() => setColor(value)}
-                      className={`size-9 rounded-full ${color === value ? "ring-2 ring-ring ring-offset-2" : ""}`}
+                      aria-label={`Colour ${value}`}
+                      aria-pressed={field.value === value}
+                      onClick={() => field.onChange(value)}
+                      className={cn(
+                        "grid size-9 place-items-center rounded-full text-white outline-none transition focus-visible:ring-3 focus-visible:ring-ring/50",
+                        field.value === value &&
+                          "ring-2 ring-ring ring-offset-2 ring-offset-background",
+                      )}
                       style={{ backgroundColor: value }}
-                    />
+                    >
+                      {field.value === value && <Check className="size-4" />}
+                    </button>
                   ))}
                 </div>
-              </div>
-              {error && (
-                <p role="alert" className="text-sm text-destructive">
-                  {error}
-                </p>
               )}
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => setOpen(false)}
-                >
-                  Cancel
-                </Button>
-                <Button disabled={saving} type="submit">
-                  {saving ? "Adding…" : "Add category"}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-      </div>
-      {error && !open && (
-        <p
-          role="alert"
-          className="rounded-xl bg-destructive/10 p-3 text-sm text-destructive"
-        >
-          {error}
-        </p>
-      )}
-      <div className="grid gap-4 md:grid-cols-2">
-        {items.map((item) => {
-          const Icon = categoryIconMap.get(item.icon ?? "") ?? Tags;
-          return (
-            <Card key={item.id}>
-              <CardContent className="flex items-center gap-4 p-4">
-                <div
-                  className="grid size-11 place-items-center rounded-2xl text-white"
-                  style={{ backgroundColor: item.color ?? colors[0] }}
-                >
-                  <Icon className="size-5" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="truncate font-medium">{item.name}</p>
-                    {item.is_default && (
-                      <Badge variant="secondary">Default</Badge>
-                    )}
-                  </div>
-                  <p className="text-xs capitalize text-muted-foreground">
-                    {item.category_type}
-                    {item.monthly_budget && Number(item.monthly_budget) > 0
-                      ? ` · Monthly budget ${Number(item.monthly_budget).toLocaleString()}`
-                      : ""}
-                  </p>
-                </div>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  aria-label={`Archive ${item.name}`}
-                  onClick={() => void archive(item.id)}
-                >
-                  <Archive />
-                </Button>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-      {!items.length && !error && (
-        <Card className="border-dashed">
-          <CardContent className="flex min-h-56 flex-col items-center justify-center text-center">
-            <Tags className="size-9 text-muted-foreground" />
-            <h3 className="mt-3 font-semibold">No categories yet</h3>
-            <Button className="mt-4" onClick={() => setOpen(true)}>
-              <Plus />
-              Add first category
+            />
+          </Field>
+
+          {values.type === "expense" && (
+            <Field
+              id="category-budget"
+              label="Monthly budget"
+              optional
+              error={errors.budget?.message}
+            >
+              <MoneyInput
+                id="category-budget"
+                symbol={currency.symbol}
+                error={errors.budget?.message}
+                placeholder="e.g. 5000"
+                {...form.register("budget")}
+              />
+            </Field>
+          )}
+
+          <FormAlert>{formError}</FormAlert>
+
+          <DialogFooter>
+            {category && (
+              <Button
+                type="button"
+                variant="destructive"
+                className="sm:mr-auto"
+                disabled={isSubmitting}
+                onClick={() => onArchive(category)}
+              >
+                <Archive />
+                Archive
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={isSubmitting}
+              onClick={() => changeOpen(false)}
+            >
+              Cancel
             </Button>
-          </CardContent>
-        </Card>
-      )}
-    </div>
+            <Button type="submit" loading={isSubmitting}>
+              {isSubmitting
+                ? "Saving…"
+                : category
+                  ? "Save changes"
+                  : "Add category"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

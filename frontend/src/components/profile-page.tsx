@@ -1,25 +1,139 @@
 import { useState } from "react";
-import {
-  BadgeCheck,
-  Globe2,
-  Landmark,
-  Settings2,
-  ShieldCheck,
-} from "lucide-react";
+import { BadgeCheck, Globe2, Landmark, Pencil } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Field, FormAlert } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useAuth } from "@/features/auth/auth-context";
+import { controlProps, errorMessage, notifySuccess } from "@/lib/forms";
+
+type ProfileErrors = Partial<
+  Record<"name" | "country" | "currency" | "locale" | "timeZone", string>
+>;
+const fieldIds: Record<keyof ProfileErrors, string> = {
+  name: "display-name",
+  country: "country",
+  currency: "currency",
+  locale: "locale",
+  timeZone: "timezone",
+};
+
+const countries = [
+  ["IN", "India"],
+  ["US", "United States"],
+  ["GB", "United Kingdom"],
+  ["AE", "United Arab Emirates"],
+  ["SG", "Singapore"],
+  ["AU", "Australia"],
+  ["CA", "Canada"],
+  ["DE", "Germany"],
+  ["FR", "France"],
+  ["JP", "Japan"],
+] as const;
+
+const locales = [
+  ["en-IN", "English (India)"],
+  ["hi-IN", "Hindi (India)"],
+  ["ta-IN", "Tamil (India)"],
+  ["te-IN", "Telugu (India)"],
+  ["kn-IN", "Kannada (India)"],
+  ["ml-IN", "Malayalam (India)"],
+  ["mr-IN", "Marathi (India)"],
+  ["bn-IN", "Bengali (India)"],
+  ["gu-IN", "Gujarati (India)"],
+  ["pa-IN", "Punjabi (India)"],
+  ["en-US", "English (United States)"],
+  ["en-GB", "English (United Kingdom)"],
+] as const;
+
+const commonCurrencies = [
+  "INR",
+  "USD",
+  "EUR",
+  "GBP",
+  "AED",
+  "SGD",
+  "AUD",
+  "CAD",
+  "JPY",
+];
+const currencyNames = new Intl.DisplayNames(["en"], { type: "currency" });
+const currencies = (
+  Intl.supportedValuesOf?.("currency") ?? commonCurrencies
+).map((code) => [code, currencyNames.of(code) ?? code] as const);
+const timeZones = Intl.supportedValuesOf?.("timeZone") ?? [
+  "Asia/Kolkata",
+  "Asia/Dubai",
+  "Asia/Singapore",
+  "Europe/London",
+  "America/New_York",
+  "America/Los_Angeles",
+  "Australia/Sydney",
+];
+
+function withCurrent<T extends readonly [string, string]>(
+  options: readonly T[],
+  value: string,
+): readonly (readonly [string, string])[] {
+  return value && !options.some(([option]) => option === value)
+    ? [[value, value], ...options]
+    : options;
+}
+
+function withCurrentValue(options: readonly string[], value: string) {
+  return value && !options.includes(value) ? [value, ...options] : options;
+}
+
+function validateProfile(values: {
+  name: string;
+  country: string;
+  currency: string;
+  locale: string;
+  timeZone: string;
+}) {
+  const errors: ProfileErrors = {};
+  if (!values.name.trim()) errors.name = "Enter your name";
+  else if (values.name.trim().length > 120)
+    errors.name = "Keep your name under 120 characters";
+  if (values.country && !/^[A-Z]{2}$/.test(values.country))
+    errors.country = "Use a two-letter code, like IN";
+  if (
+    !/^[A-Z]{3}$/.test(values.currency) ||
+    !(Intl.supportedValuesOf?.("currency").includes(values.currency) ?? true)
+  )
+    errors.currency = "Enter a valid currency code, like INR or USD";
+  try {
+    if (!values.locale.trim()) throw new Error();
+    Intl.getCanonicalLocales(values.locale.trim());
+  } catch {
+    errors.locale = "Enter a locale such as en-IN";
+  }
+  try {
+    new Intl.DateTimeFormat(undefined, { timeZone: values.timeZone.trim() });
+    if (!values.timeZone.trim()) throw new Error();
+  } catch {
+    errors.timeZone = "Enter a time zone such as Asia/Kolkata";
+  }
+  return errors;
+}
 
 export function ProfilePage() {
   const { profile, updateProfile } = useAuth();
@@ -32,25 +146,51 @@ export function ProfilePage() {
     profile?.time_zone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
   );
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [formError, setFormError] = useState("");
+  const [errors, setErrors] = useState<ProfileErrors>({});
+
+  function edit(field: keyof ProfileErrors, apply: () => void) {
+    apply();
+    setErrors((current) => ({ ...current, [field]: undefined }));
+  }
 
   async function save() {
-    if (!name.trim()) return;
+    const nextErrors = validateProfile({
+      name,
+      country,
+      currency,
+      locale,
+      timeZone,
+    });
+    setErrors(nextErrors);
+    const firstInvalid = Object.keys(nextErrors)[0];
+    if (firstInvalid) {
+      document
+        .getElementById(fieldIds[firstInvalid as keyof ProfileErrors])
+        ?.focus();
+      return false;
+    }
     setSaving(true);
-    setMessage("");
+    setFormError("");
     try {
       await updateProfile({
         display_name: name.trim(),
         country_code: country.toUpperCase() || null,
         base_currency: currency.toUpperCase(),
-        locale,
-        time_zone: timeZone,
+        locale: locale.trim(),
+        time_zone: timeZone.trim(),
       });
-      setMessage("Your profile and regional preferences were saved.");
-    } catch (reason) {
-      setMessage(
-        reason instanceof Error ? reason.message : "Could not save profile",
+      notifySuccess(
+        "Profile saved",
+        "Money and dates now use your regional preferences.",
       );
+      return true;
+    } catch (reason) {
+      setFormError(
+        errorMessage(reason, "Could not save your profile. Please try again."),
+      );
+      return false;
     } finally {
       setSaving(false);
     }
@@ -90,8 +230,8 @@ export function ProfilePage() {
               <p className="text-sm text-muted-foreground">{profile?.email}</p>
             </div>
           </div>
-          <Button variant="outline" onClick={() => navigate("/settings")}>
-            <Settings2 /> Account settings
+          <Button variant="outline" onClick={() => setEditingProfile(true)}>
+            <Pencil /> Edit profile
           </Button>
         </CardContent>
       </Card>
@@ -100,95 +240,139 @@ export function ProfilePage() {
         <div className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Personal information</CardTitle>
-              <CardDescription>
-                How your identity appears throughout Spendova.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-5 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="display-name">Display name</Label>
-                <Input
-                  id="display-name"
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="profile-email">Email address</Label>
-                <Input
-                  id="profile-email"
-                  type="email"
-                  value={profile?.email ?? ""}
-                  readOnly
-                />
-                <p className="text-xs text-muted-foreground">
-                  Managed by your sign-in provider
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
               <CardTitle>Regional preferences</CardTitle>
-              <CardDescription>
-                Used for money formatting, dates, and future reminders.
-              </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-5 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="country">Country code</Label>
-                <Input
-                  id="country"
-                  maxLength={2}
-                  value={country}
-                  placeholder="IN"
-                  onChange={(event) =>
-                    setCountry(event.target.value.toUpperCase())
+              <Field
+                id="country"
+                label="Country code"
+                optional
+                hint="Two letters, like IN"
+                error={errors.country}
+              >
+                <Select
+                  value={country || null}
+                  onValueChange={(value) =>
+                    value && edit("country", () => setCountry(value))
                   }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="currency">Primary currency</Label>
-                <Input
-                  id="currency"
-                  maxLength={3}
-                  value={currency}
-                  onChange={(event) =>
-                    setCurrency(event.target.value.toUpperCase())
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="locale">Language and locale</Label>
-                <Input
-                  id="locale"
-                  value={locale}
-                  onChange={(event) => setLocale(event.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="timezone">Time zone</Label>
-                <Input
-                  id="timezone"
-                  value={timeZone}
-                  onChange={(event) => setTimeZone(event.target.value)}
-                />
-              </div>
-              <div className="sm:col-span-2 flex flex-col gap-3 border-t pt-5 sm:flex-row sm:items-center sm:justify-between">
-                {message ? (
-                  <p role="status" className="text-sm text-muted-foreground">
-                    {message}
-                  </p>
-                ) : (
-                  <span />
-                )}
-                <Button
-                  disabled={saving || !name.trim() || currency.length !== 3}
-                  onClick={() => void save()}
                 >
-                  {saving ? "Saving…" : "Save changes"}
-                </Button>
+                  <SelectTrigger
+                    {...controlProps("country", errors.country)}
+                    className="w-full"
+                  >
+                    <SelectValue placeholder="Select country">
+                      {
+                        withCurrent(countries, country).find(
+                          ([code]) => code === country,
+                        )?.[1]
+                      }
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {withCurrent(countries, country).map(([code, label]) => (
+                      <SelectItem key={code} value={code}>
+                        {label} ({code})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field
+                id="currency"
+                label="Primary currency"
+                hint="Three letters, like INR"
+                error={errors.currency}
+              >
+                <Select
+                  value={currency}
+                  onValueChange={(value) =>
+                    value && edit("currency", () => setCurrency(value))
+                  }
+                >
+                  <SelectTrigger
+                    {...controlProps("currency", errors.currency)}
+                    className="w-full"
+                  >
+                    <SelectValue>
+                      {currency} · {currencyNames.of(currency)}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {withCurrent(currencies, currency).map(([code, label]) => (
+                      <SelectItem key={code} value={code}>
+                        {code} · {label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field
+                id="locale"
+                label="Language and locale"
+                hint="For example en-IN"
+                error={errors.locale}
+              >
+                <Select
+                  value={locale}
+                  onValueChange={(value) =>
+                    value && edit("locale", () => setLocale(value))
+                  }
+                >
+                  <SelectTrigger
+                    {...controlProps("locale", errors.locale)}
+                    className="w-full"
+                  >
+                    <SelectValue>
+                      {
+                        withCurrent(locales, locale).find(
+                          ([code]) => code === locale,
+                        )?.[1]
+                      }
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {withCurrent(locales, locale).map(([code, label]) => (
+                      <SelectItem key={code} value={code}>
+                        {label} ({code})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field
+                id="timezone"
+                label="Time zone"
+                hint="For example Asia/Kolkata"
+                error={errors.timeZone}
+              >
+                <Select
+                  value={timeZone}
+                  onValueChange={(value) =>
+                    value && edit("timeZone", () => setTimeZone(value))
+                  }
+                >
+                  <SelectTrigger
+                    {...controlProps("timezone", errors.timeZone)}
+                    className="w-full"
+                  >
+                    <SelectValue>{timeZone}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {withCurrentValue(timeZones, timeZone).map((zone) => (
+                      <SelectItem key={zone} value={zone}>
+                        {zone}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <div className="space-y-3 border-t pt-5 sm:col-span-2">
+                <FormAlert>{formError}</FormAlert>
+                <div className="flex justify-end">
+                  <Button loading={saving} onClick={() => void save()}>
+                    {saving ? "Saving…" : "Save changes"}
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -196,25 +380,7 @@ export function ProfilePage() {
         <div className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <ShieldCheck className="size-5 text-primary" /> Security
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm font-medium">Google authentication</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Your identity and profile photo are protected by your Google
-                account.
-              </p>
-              <Badge className="mt-4" variant="secondary">
-                Email verified
-              </Badge>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
               <CardTitle>Workspace</CardTitle>
-              <CardDescription>Your personal Spendova setup.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
               <QuickAction
@@ -231,6 +397,38 @@ export function ProfilePage() {
           </Card>
         </div>
       </div>
+
+      <Dialog open={editingProfile} onOpenChange={setEditingProfile}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit profile</DialogTitle>
+            <DialogDescription>
+              Update the name shown across your Spendova workspace.
+            </DialogDescription>
+          </DialogHeader>
+          <Field id="display-name" label="Display name" error={errors.name}>
+            <Input
+              {...controlProps("display-name", errors.name)}
+              value={name}
+              autoComplete="name"
+              onChange={(event) =>
+                edit("name", () => setName(event.target.value))
+              }
+            />
+          </Field>
+          <FormAlert>{formError}</FormAlert>
+          <DialogFooter showCloseButton>
+            <Button
+              loading={saving}
+              onClick={() =>
+                void save().then((saved) => saved && setEditingProfile(false))
+              }
+            >
+              Save name
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -2,9 +2,10 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 from uuid import uuid4
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from . import domain
 from .db.session import Base
 
 
@@ -43,6 +44,21 @@ class EmailVerificationCode(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 
+class PasswordResetCode(Base):
+    """One active reset per user: an emailed code, then a single-use reset token."""
+
+    __tablename__ = "password_reset_codes"
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    code_digest: Mapped[str] = mapped_column(String(64))
+    code_expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    token_digest: Mapped[str | None] = mapped_column(String(64), unique=True)
+    token_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
 class Account(Base):
     __tablename__ = "accounts"
     __table_args__ = (Index("ix_accounts_user_active", "user_id", "archived"),)
@@ -52,6 +68,13 @@ class Account(Base):
     account_type: Mapped[str] = mapped_column(String(30))
     currency: Mapped[str] = mapped_column(String(3), default="INR")
     opening_balance: Mapped[Decimal] = mapped_column(Numeric(19, 4), default=0)
+    institution: Mapped[str | None] = mapped_column(String(100))
+    principal_amount: Mapped[Decimal | None] = mapped_column(Numeric(19, 4))
+    annual_interest_rate: Mapped[Decimal | None] = mapped_column(Numeric(7, 4))
+    started_on: Mapped[date | None] = mapped_column(Date)
+    maturity_on: Mapped[date | None] = mapped_column(Date)
+    tenure_months: Mapped[int | None] = mapped_column(Integer)
+    installment_amount: Mapped[Decimal | None] = mapped_column(Numeric(19, 4))
     archived: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
@@ -87,9 +110,12 @@ class Transaction(Base):
     currency: Mapped[str] = mapped_column(String(3), default="INR")
     source: Mapped[str] = mapped_column(String(100))
     destination: Mapped[str] = mapped_column(String(100))
+    source_account_id: Mapped[str | None] = mapped_column(ForeignKey("accounts.id", ondelete="SET NULL"), index=True)
+    destination_account_id: Mapped[str | None] = mapped_column(ForeignKey("accounts.id", ondelete="SET NULL"), index=True)
     merchant: Mapped[str | None] = mapped_column(String(160))
     occurred_on: Mapped[date] = mapped_column(Date)
     category_id: Mapped[str | None] = mapped_column(ForeignKey("categories.id", ondelete="SET NULL"), index=True)
+    recurring_rule_id: Mapped[str | None] = mapped_column(ForeignKey("recurring_rules.id", ondelete="SET NULL"), index=True)
     notes: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(20), default="cleared")
     idempotency_key: Mapped[str] = mapped_column(String(100))
@@ -123,7 +149,13 @@ class Goal(Base):
 
 class Asset(Base):
     __tablename__ = "assets"
-    __table_args__ = (Index("ix_assets_user_status", "user_id", "status"),)
+    __table_args__ = (
+        Index("ix_assets_user_status", "user_id", "status"),
+        CheckConstraint(
+            "expected_life_months IS NULL OR target_cost_per_day IS NULL",
+            name="ck_assets_single_replacement_goal",
+        ),
+    )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     name: Mapped[str] = mapped_column(String(120))
@@ -133,15 +165,27 @@ class Asset(Base):
     currency: Mapped[str] = mapped_column(String(3), default="INR")
     notes: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(20), default="active")
+    expected_life_months: Mapped[int | None] = mapped_column(Integer)
+    target_cost_per_day: Mapped[Decimal | None] = mapped_column(Numeric(19, 4))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
     @property
     def age_days(self) -> int:
-        return max(1, (date.today() - self.purchased_on).days)
+        return domain.days_owned(self.purchased_on, date.today())
 
     @property
     def cost_per_day(self) -> Decimal:
-        return (self.purchase_price / self.age_days).quantize(Decimal("0.01"))
+        return domain.cost_per_day(self.purchase_price, self.purchased_on, date.today())
+
+    @property
+    def replacement_goal(self) -> domain.ReplacementGoal | None:
+        return domain.replacement_goal(
+            self.purchase_price,
+            self.purchased_on,
+            date.today(),
+            self.expected_life_months,
+            self.target_cost_per_day,
+        )
 
 
 class Budget(Base):
@@ -179,7 +223,13 @@ class RecurringRule(Base):
     next_due_on: Mapped[date] = mapped_column(Date)
     source: Mapped[str] = mapped_column(String(100))
     destination: Mapped[str] = mapped_column(String(100))
+    source_account_id: Mapped[str | None] = mapped_column(ForeignKey("accounts.id", ondelete="SET NULL"), index=True)
+    destination_account_id: Mapped[str | None] = mapped_column(ForeignKey("accounts.id", ondelete="SET NULL"), index=True)
     category_id: Mapped[str | None] = mapped_column(ForeignKey("categories.id", ondelete="SET NULL"), index=True)
+    plan_type: Mapped[str] = mapped_column(String(20), default="bill")
+    cost_amount: Mapped[Decimal | None] = mapped_column(Numeric(19, 4))
+    annual_return_rate: Mapped[Decimal | None] = mapped_column(Numeric(7, 4))
+    tenure_months: Mapped[int | None] = mapped_column(Integer)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 

@@ -1,125 +1,203 @@
 import { useState } from "react";
-import { Badge } from "@/components/ui/badge";
+import { Controller, useForm, useWatch } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { addDays } from "date-fns";
+import { z } from "zod";
+import { DatePicker } from "@/components/date-picker";
+import { MoneyInput } from "@/components/money-input";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Field, FormAlert } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { useMoney } from "@/hooks/use-money";
+import { createGoal, type GoalItem } from "@/lib/api";
+import { localDateISO } from "@/lib/format";
+import {
+  applyServerErrors,
+  controlProps,
+  money,
+  notifySuccess,
+  optionalMoney,
+  requiredText,
+} from "@/lib/forms";
 import { purchaseGoal } from "@/lib/planning";
-const money = (v: number) =>
-  new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 0,
-  }).format(v);
-export function PurchaseGoalCalculator() {
-  const [price, setPrice] = useState(120000),
-    [saved, setSaved] = useState(20000),
-    [date, setDate] = useState("2026-12-31");
-  const result = purchaseGoal({ targetPrice: price, saved, targetDate: date });
+
+const schema = z
+  .object({
+    name: requiredText("Name what you're saving for", 100),
+    price: money("the expected price"),
+    saved: optionalMoney({ allowZero: true }),
+    date: z
+      .string()
+      .min(1, "Choose when you want to buy it")
+      .refine((value) => value > localDateISO(), "Choose a date after today"),
+  })
+  .superRefine((value, context) => {
+    if (value.saved && Number(value.saved) > Number(value.price))
+      context.addIssue({
+        code: "custom",
+        path: ["saved"],
+        message: "Can't be more than the expected price",
+      });
+  });
+type Values = z.input<typeof schema>;
+
+export function PurchaseGoalCalculator({
+  onSaved,
+}: {
+  onSaved?: (goal: GoalItem) => void;
+}) {
+  const currency = useMoney();
+  const [formError, setFormError] = useState("");
+  const [tomorrow] = useState(() => localDateISO(addDays(new Date(), 1)));
+  const form = useForm<Values>({
+    resolver: zodResolver(schema),
+    mode: "onTouched",
+    defaultValues: { name: "", price: "", saved: "", date: "" },
+  });
+  const { errors, isSubmitting } = form.formState;
+  const values = useWatch({ control: form.control });
+  const price = Number(values.price?.replace(/,/g, ""));
+  const saved = Number(values.saved?.replace(/,/g, "") || 0);
+  const result =
+    price > 0 && values.date && values.date > localDateISO()
+      ? purchaseGoal({ targetPrice: price, saved, targetDate: values.date })
+      : null;
+  const show = (value: number) => (result ? currency.format(value, 0) : "—");
+
+  async function save(input: Values) {
+    setFormError("");
+    const parsed = schema.parse(input);
+    const plan = purchaseGoal({
+      targetPrice: Number(parsed.price),
+      saved: Number(parsed.saved || 0),
+      targetDate: parsed.date,
+    });
+    try {
+      const goal = await createGoal({
+        name: parsed.name,
+        target_amount: parsed.price,
+        saved_amount: parsed.saved || "0",
+        months: plan.months,
+      });
+      notifySuccess(
+        `${goal.name} goal saved`,
+        `Save ${currency.format(goal.monthly_required, 0)} a month.`,
+      );
+      form.reset();
+      onSaved?.(goal);
+    } catch (reason) {
+      setFormError(
+        applyServerErrors(
+          reason,
+          form.setError,
+          { name: "name", target_amount: "price", saved_amount: "saved" },
+          "Could not save this goal.",
+        ),
+      );
+    }
+  }
+
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
+    <div className="grid gap-4 lg:grid-cols-2 lg:gap-6">
       <Card>
         <CardHeader>
-          <CardTitle>What are you planning?</CardTitle>
-          <CardDescription>
-            Choose the exact target date; Spendova calculates every saving pace.
-          </CardDescription>
+          <CardTitle>Plan a purchase</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label>Purchase</Label>
-            <Input defaultValue="New iPhone" />
-          </div>
-          <div className="grid gap-3 min-[400px]:grid-cols-2">
-            <Field label="Expected price" value={price} set={setPrice} />
-            <Field label="Already saved" value={saved} set={setSaved} />
-          </div>
-          <div className="space-y-2">
-            <Label>Buy on</Label>
-            <Input
-              type="date"
-              min="2026-09-30"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-            />
-          </div>
-          <Button className="w-full">Save this goal</Button>
+        <CardContent>
+          <form
+            noValidate
+            className="space-y-4"
+            onSubmit={form.handleSubmit(save)}
+          >
+            <Field id="goal-name" label="What" error={errors.name?.message}>
+              <Input
+                {...controlProps("goal-name", errors.name?.message)}
+                {...form.register("name")}
+                autoComplete="off"
+                placeholder="e.g. iPhone 17"
+              />
+            </Field>
+            <div className="grid gap-4 min-[400px]:grid-cols-2">
+              <Field
+                id="goal-price"
+                label="Expected price"
+                error={errors.price?.message}
+              >
+                <MoneyInput
+                  id="goal-price"
+                  symbol={currency.symbol}
+                  error={errors.price?.message}
+                  {...form.register("price")}
+                />
+              </Field>
+              <Field
+                id="goal-saved"
+                label="Already saved"
+                optional
+                error={errors.saved?.message}
+              >
+                <MoneyInput
+                  id="goal-saved"
+                  symbol={currency.symbol}
+                  error={errors.saved?.message}
+                  {...form.register("saved")}
+                />
+              </Field>
+            </div>
+            <Field id="goal-date" label="Buy by" error={errors.date?.message}>
+              <Controller
+                control={form.control}
+                name="date"
+                render={({ field }) => (
+                  <DatePicker
+                    id="goal-date"
+                    value={field.value}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                    triggerRef={field.ref}
+                    min={tomorrow}
+                    invalid={!!errors.date}
+                    describedBy={errors.date ? "goal-date-error" : undefined}
+                  />
+                )}
+              />
+            </Field>
+            <FormAlert>{formError}</FormAlert>
+            <Button type="submit" className="w-full" loading={isSubmitting}>
+              {isSubmitting ? "Saving…" : "Save goal"}
+            </Button>
+          </form>
         </CardContent>
       </Card>
       <Card className="bg-gradient-to-br from-slate-900 to-teal-950 text-white">
-        <CardHeader>
-          <div className="flex justify-between gap-3">
-            <div>
-              <CardTitle className="text-white">Your saving route</CardTitle>
-              <CardDescription className="text-slate-300">
-                {result.days} days remaining · {money(result.remaining)} still
-                needed
-              </CardDescription>
-            </div>
-            <Badge
-              className={
-                result.pastDue
-                  ? "bg-rose-400/20 text-rose-200"
-                  : "bg-emerald-400/20 text-emerald-200"
-              }
-            >
-              {result.pastDue ? "Date passed" : "On schedule"}
-            </Badge>
+        <CardContent className="space-y-5 p-5 sm:p-6">
+          <div>
+            <p className="text-sm text-slate-300">Save each month</p>
+            <p className="money mt-1 text-4xl font-semibold">
+              {show(result?.monthly ?? 0)}
+            </p>
           </div>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-slate-300">Save each month</p>
-          <p className="money mt-1 text-4xl font-semibold">
-            {money(result.monthly)}
-          </p>
-          <div className="mt-6 grid gap-3 min-[400px]:grid-cols-2">
-            <Metric label="Per day" value={money(result.daily)} />
-            <Metric label="Per week" value={money(result.weekly)} />
-            <Metric label="Months" value={String(result.months)} />
-            <Metric label="At purchase" value={money(price)} />
+          <div className="grid grid-cols-2 gap-3">
+            <Metric label="Per day" value={show(result?.daily ?? 0)} />
+            <Metric label="Per week" value={show(result?.weekly ?? 0)} />
+            <Metric label="Still needed" value={show(result?.remaining ?? 0)} />
+            <Metric
+              label="Days left"
+              value={result ? result.days.toLocaleString() : "—"}
+            />
           </div>
-          <p className="mt-5 text-xs text-slate-400">
-            Savings are reserved for this goal and are not counted as ordinary
-            spending. Buying is marked affordable only when the goal reaches
-            100% without using your emergency reserve.
-          </p>
         </CardContent>
       </Card>
     </div>
   );
 }
-function Field({
-  label,
-  value,
-  set,
-}: {
-  label: string;
-  value: number;
-  set: (v: number) => void;
-}) {
-  return (
-    <div className="space-y-2">
-      <Label>{label}</Label>
-      <Input
-        type="number"
-        min="0"
-        value={value}
-        onChange={(e) => set(Number(e.target.value))}
-      />
-    </div>
-  );
-}
+
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl bg-white/10 p-3">
       <p className="text-xs text-slate-400">{label}</p>
-      <p className="money mt-1 font-semibold">{value}</p>
+      <p className="money mt-1 truncate font-semibold">{value}</p>
     </div>
   );
 }

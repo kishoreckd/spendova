@@ -230,9 +230,7 @@ C:\Users\CXO\OneDrive - CXOntology Inc\expense
 The obsolete path `C:\Users\CXO\Music\expense` does not exist, although some
 tool tracebacks may display cached source paths.
 
-The local folder currently has no `.git` directory. The user identified the
-intended GitHub repository as `kishoreckd/spendova`, but repository initialization
-or reconnection is still required.
+The folder is a Git repository connected to `kishoreckd/spendova` on `main`.
 
 ## 7. Frontend implementation history
 
@@ -499,8 +497,8 @@ At the start of a new session:
 5. Run backend tests from `backend/`.
 6. Run frontend `npm run check`.
 7. Confirm Alembic revision without printing the database URL.
-8. Apply migration 0005, verify real browser workflows, and follow NEXT_STEPS.md
-   unless the user changes priority.
+8. Confirm the database reached the repository head (`20261020_0006`), verify
+   real browser workflows, and follow NEXT_STEPS.md unless the user changes priority.
 9. Update this handoff after material implementation changes.
 
 ## 17. Latest implementation and repository history
@@ -533,3 +531,33 @@ On 20 October 2026:
   are included in the image and Uvicorn binds to Railway's injected `PORT`.
 - The monorepo deployment layout was retained. Railway must use `/backend`, and
   Vercel must use `frontend`; `frontend/vercel.json` supplies SPA rewrites.
+
+## 18. 20–21 October 2026: UX, forms, assets, and planning
+
+User direction and corrections from this session:
+
+- The app is used mostly on desktop **and** mobile; the user checks mobile
+  screenshots closely. Verify layouts at 360–400px.
+- **No explanatory copy anywhere.** The user explicitly asked to remove page
+  intros, card descriptions, dialog descriptions, and helper hints. Keep labels,
+  placeholders, data, and errors only. Dialog descriptions remain as `sr-only`.
+- Every submit needs a loading state, inline field errors (no browser bubbles),
+  and success/error feedback. Toast placement was analysed: desktop top-right
+  under the header; mobile full-width top with swipe dismissal.
+- Expense-app style pickers: tiles for frequent choices (transaction categories),
+  compact chip "select tags" for occasional choices (asset and account types).
+  Users can create categories and asset types inline.
+- Use the shadcn date picker (Popover + Calendar), not the native date input.
+- Export should be Excel, not only JSON.
+
+Asset replacement logic (the user's own model): an owned product's cost per day
+is purchase price ÷ days owned and falls every day. The user optionally sets
+either an expected life (e.g. 3 years) or a target cost per day (e.g. ₹50). The
+goal is reached on the first day the cost per day reaches that target; the user
+then feels satisfied replacing the product. Without a goal, only cost per day is
+shown. See `app/domain.py::replacement_goal`.
+
+Implemented: migration `0006`, asset PATCH, category PATCH, budget status by
+category and delete, Plan page create flows (budget, bill, goal contribution),
+category edit, Excel export, shell header page actions, mobile FAB, persistent
+theme, real greeting, and the shared form system listed in CURRENT_STATUS.md.

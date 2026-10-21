@@ -1,50 +1,50 @@
 # Ordered Next Steps
 
-Updated: 20 October 2026 (Asia/Kolkata)
+Updated: 21 October 2026 (Asia/Kolkata)
 
-## 1. Database release
+## 1. Release the 21 October work
 
-- Rotate any database password that appeared in chat.
-- Connected Supabase is at `20261020_0005`; retain `alembic upgrade head` as the Railway pre-deploy command.
-- Test cross-user isolation for every financial endpoint.
+- Review and commit the uncommitted changes.
+- Deploy the backend first so Railway runs migrations through `20261021_0011`, then the frontend.
+- On a real iPhone and Android phone, check: transaction sheet, date picker,
+  toasts, asset goal, budget/bill/goal dialogs, category edit, Excel export.
 
-## 2. End-to-end verification
+## 1a. Configure email and password reset
 
-- Test Google and email/password sign-in plus email verification.
-- Create one account, category, transaction, asset, goal, budget, and recurring
-  rule; refresh and confirm every record remains in PostgreSQL.
-- Verify asset cost-per-day and reports using known test values.
-- Test Android Chrome, iPhone Safari, keyboard use, dark mode, and error states.
+- Railway secrets: `FIREBASE_SERVICE_ACCOUNT_JSON` (Firebase console → Project
+  settings → Service accounts → Generate new private key, pasted as one line),
+  `EMAIL_DELIVERY_MODE=smtp`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`,
+  `SMTP_PASSWORD`, `EMAIL_FROM`, and `APP_URL` (the Vercel address).
+- Use a sending provider with SPF/DKIM on a domain you own so codes avoid spam.
+- Add per-IP rate limiting to the public reset endpoints (only per-email
+  throttling exists today).
 
-## 3. Complete finance CRUD
+## 2. Production safety (before real users)
 
-- Add edit operations for accounts, assets, categories, goals, budgets, and rules.
-- Derive live balances from opening balances plus ledger entries.
-- Model credit limits/statements, loans/EMIs, and investment valuations.
-- Add goal target dates and daily/weekly/monthly contribution requirements.
-- Add transaction splits, refunds, reversals, and audit history.
+- Refuse to start when `ENVIRONMENT=production` unless `AUTH_REQUIRED=true`, the
+  OTP secret is changed, and SMTP is configured. Today every setting defaults
+  to development, which allows `X-User-Id` impersonation and logs OTP codes.
+- Rotate the database password that appeared in an earlier chat.
+- Handle concurrent requests: duplicate idempotency keys and the default-category
+  insert in `GET /categories` can both raise 500s.
+- Validate `year`/`month` on `/dashboard`; compute "today" in the user's time zone.
+- Run backend tests against PostgreSQL in CI (SQLite ignores foreign keys).
+
+## 3. Finance model
+
+- Transaction edit and void in the UI; transaction table with filters and
+  pagination on desktop.
+- Budget and commitment editing; recurring worker.
+- Goal target dates instead of month counts.
+- Credit card statements, amortization schedules, investment valuations, splits, refunds.
 
 ## 4. Notifications and privacy
 
-- Store notification preferences in PostgreSQL.
-- Add an outbox and scheduled reminder worker.
-- Configure SMTP; keep codes and financial values out of logs.
-- Add account deletion and a versioned server-side export.
+- Persist notification preferences in PostgreSQL; outbox + reminder worker.
+- Account deletion and a server-side versioned export.
 
-## 5. Deployment
+## 5. Release hardening
 
-- Connect `kishoreckd/spendova` to Railway, set Root Directory to `/backend`,
-  configure the documented variables, and set `AUTH_REQUIRED=true`.
-- Configure Railway pre-deploy command `alembic upgrade head` and healthcheck `/health`.
-- Configure exact production CORS origins.
-- Deploy Vite to Vercel with root directory `frontend`.
-- Set `VITE_API_URL` to the Railway `/api/v1` endpoint.
-- Add production domains to Firebase and run migrations as an explicit release step.
-
-## 6. Release hardening
-
-- Expand API authorization and abuse tests.
-- Add frontend component and end-to-end tests for money workflows.
-- Rehearse PostgreSQL backup/restore.
-- Add dependency scanning and protected-branch rules.
-- Review bundle size; Recharts and Firebase are the largest chunks.
+- Frontend component and end-to-end tests for money workflows.
+- Rate limiting, request IDs, monitoring, backup/restore rehearsal.
+- Dependency scanning and protected-branch rules.

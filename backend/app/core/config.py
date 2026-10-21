@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", case_sensitive=False, extra="ignore")
 
     app_name: str = "Spendova API"
-    app_version: str = "0.6.0"
+    app_version: str = "0.7.0"
     environment: str = "development"
     database_url: str = "sqlite:///./spendova.db"
     cors_origins: Annotated[list[str], NoDecode] = ["http://localhost:5173"]
@@ -24,6 +24,14 @@ class Settings(BaseSettings):
     smtp_use_tls: bool = True
     otp_secret: str = "development-only-change-me"
     otp_expiry_minutes: int = 10
+    # Password reset: emailed code lifetime, then a short window to set the new password.
+    password_reset_code_minutes: int = 10
+    password_reset_token_minutes: int = 15
+    # Firebase Admin credentials (service-account JSON as one line). Required to
+    # change passwords from the server; never expose it to the frontend.
+    firebase_service_account_json: str | None = None
+    # Public web address used for links inside emails.
+    app_url: str = "http://localhost:5173"
 
     @field_validator("cors_origins", mode="before")
     @classmethod

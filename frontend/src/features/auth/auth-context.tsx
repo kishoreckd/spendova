@@ -12,7 +12,6 @@ import {
   GoogleAuthProvider,
   createUserWithEmailAndPassword,
   onIdTokenChanged,
-  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut as firebaseSignOut,
@@ -42,7 +41,6 @@ type AuthContextValue = {
   ) => Promise<string | null>;
   sendEmailVerificationCode: () => Promise<string | null>;
   verifyEmailCode: (code: string) => Promise<SpendovaUser>;
-  resetPassword: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
   updateProfile: (values: Partial<SpendovaUser>) => Promise<SpendovaUser>;
 };
@@ -151,11 +149,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return nextProfile;
   }, []);
 
-  const resetPassword = useCallback(
-    async (email: string) => sendPasswordResetEmail(auth, email),
-    [],
-  );
-
   const signOut = useCallback(async () => {
     await firebaseSignOut(auth);
     setProfile(null);
@@ -178,7 +171,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signUpWithEmail,
       sendEmailVerificationCode,
       verifyEmailCode,
-      resetPassword,
       signOut,
       updateProfile,
     }),
@@ -192,7 +184,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signUpWithEmail,
       sendEmailVerificationCode,
       verifyEmailCode,
-      resetPassword,
       signOut,
       updateProfile,
     ],
