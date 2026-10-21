@@ -1,5 +1,6 @@
 import { ThemeProvider } from "next-themes";
 import { RouterProvider } from "react-router-dom";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 import { Toaster } from "@/components/ui/sonner";
 import { router } from "@/app/router";
 import { AuthProvider } from "@/features/auth/auth-context";
@@ -39,6 +40,7 @@ export default function App() {
           right: "0.75rem",
         }}
       />
+      <SpeedInsights />
     </ThemeProvider>
   );
 }
