@@ -398,7 +398,7 @@ export type AccountItem = {
   account_type: string;
   currency: string;
   opening_balance: string;
-  current_balance: string;
+  current_balance?: string;
   institution: string | null;
   principal_amount: string | null;
   annual_interest_rate: string | null;

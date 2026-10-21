@@ -134,7 +134,8 @@ export function EnhancedAccountsPage() {
   const netWorth = useMemo(
     () =>
       accounts.reduce(
-        (sum, account) => sum + Number(account.current_balance),
+        (sum, account) =>
+          sum + Number(account.current_balance ?? account.opening_balance ?? 0),
         0,
       ),
     [accounts],
@@ -186,7 +187,9 @@ export function EnhancedAccountsPage() {
             const type =
               typeByValue.get(account.account_type) ?? accountTypes[0];
             const Icon = type.icon;
-            const balance = Number(account.current_balance);
+            const balance = Number(
+              account.current_balance ?? account.opening_balance ?? 0,
+            );
             const projection = projectedDepositValue(account);
             return (
               <Card
