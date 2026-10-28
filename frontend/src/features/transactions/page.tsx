@@ -1,52 +1,37 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { subDays } from "date-fns";
 import { ArrowLeftRight, Plus, ReceiptText, Search, Tags } from "lucide-react";
-import type { ShellContext } from "@/app/app-shell";
-import { TRANSACTIONS_CHANGED } from "@/components/transaction-sheet";
+import type { TransactionItem } from "@/api/transactions/types";
+import { FormAlert } from "@/components/common/form-field";
+import type { ShellContext } from "@/components/layout/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { FormAlert } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import {
-  categoryTile,
-  useCategories,
-} from "@/features/categories/use-categories";
+import { categoryTile, useCategories } from "@/features/categories/hooks";
 import { useMoney } from "@/hooks/use-money";
-import { listTransactions, type TransactionItem } from "@/lib/api";
 import { localDateISO } from "@/lib/format";
 import { errorMessage } from "@/lib/forms";
+import { useTransactions } from "./hooks";
+
+const RECENT = { limit: 200 };
 
 export default function TransactionsPage() {
   const { openTransaction } = useOutletContext<ShellContext>();
   const currency = useMoney();
   const categories = useCategories();
   const [query, setQuery] = useState("");
-  const [transactions, setTransactions] = useState<TransactionItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  const load = useCallback(
-    () =>
-      listTransactions(200)
-        .then((items) => {
-          setTransactions(items);
-          setError("");
-        })
-        .catch((reason) =>
-          setError(errorMessage(reason, "Could not load transactions")),
-        )
-        .finally(() => setLoading(false)),
-    [],
+  const transactionsQuery = useTransactions(RECENT);
+  const transactions = useMemo(
+    () => transactionsQuery.data ?? [],
+    [transactionsQuery.data],
   );
-
-  useEffect(() => {
-    void load();
-    const onChange = () => void load();
-    window.addEventListener(TRANSACTIONS_CHANGED, onChange);
-    return () => window.removeEventListener(TRANSACTIONS_CHANGED, onChange);
-  }, [load]);
+  const loading = transactionsQuery.isPending;
+  const error = transactionsQuery.error
+    ? errorMessage(transactionsQuery.error, "Could not load transactions")
+    : "";
+  const load = transactionsQuery.refetch;
 
   const categoryById = useMemo(
     () =>

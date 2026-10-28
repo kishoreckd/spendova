@@ -10,7 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Field } from "@/components/ui/field";
+import { Field } from "@/components/common/form-field";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/features/auth/auth-context";
 import { controlProps, notifyError, notifySuccess } from "@/lib/forms";

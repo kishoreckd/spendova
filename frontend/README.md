@@ -1,7 +1,10 @@
 # Spendova Frontend
 
-React 19, TypeScript, Vite, Tailwind CSS, Firebase Authentication, and Recharts
-frontend for the Spendova personal-finance application.
+React 19, TypeScript, Vite, Tailwind CSS 4, shadcn (Base UI), TanStack Query,
+Firebase Authentication, and Recharts frontend for the Spendova personal-finance
+application. Structure: `src/api/<feature>` (typed calls), `src/features/<feature>`
+(pages, dialogs, query hooks), `src/components/common|layout|ui`. See
+[`../docs/02-architecture.md`](../docs/02-architecture.md#frontend).
 
 ## Local development
 
@@ -42,7 +45,7 @@ Deploy this repository to Vercel or Firebase Hosting. For Vercel:
 - Framework preset: `Vite`
 - Build command: `npm run build`
 - Output directory: `dist`
-- `VITE_API_URL`: `https://your-railway-domain/api/v1`
+- `VITE_API_URL`: `https://<your-backend-project>.vercel.app/api/v1`
 
 `vercel.json` provides the SPA fallback required for routes such as `/reports`
 and `/settings`. Add the deployed frontend hostname to Firebase Authentication's
@@ -51,6 +54,5 @@ authorized domains and to the backend's `CORS_ORIGINS` value.
 ## Verification
 
 ```powershell
-npm run lint
-npm run build
+npm run check   # prettier, oxlint, TypeScript, production build
 ```

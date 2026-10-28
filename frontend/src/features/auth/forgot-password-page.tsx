@@ -17,13 +17,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Field, FormAlert } from "@/components/ui/field";
+import { Field, FormAlert } from "@/components/common/form-field";
 import { Input } from "@/components/ui/input";
-import {
-  completePasswordReset,
-  requestPasswordReset,
-  verifyPasswordReset,
-} from "@/lib/api";
+import { authApi } from "@/api/auth/api";
 import { controlProps, errorMessage, notifySuccess } from "@/lib/forms";
 
 type Step = "email" | "code" | "password";
@@ -87,7 +83,7 @@ export default function ForgotPasswordPage() {
     setBusy("send");
     setFormError("");
     try {
-      const result = await requestPasswordReset(clean);
+      const result = await authApi.requestPasswordReset(clean);
       setDevelopmentCode(result.development_code);
       setResendIn(result.resend_after_seconds);
       setCode("");
@@ -112,7 +108,7 @@ export default function ForgotPasswordPage() {
     setBusy("verify");
     setFormError("");
     try {
-      const result = await verifyPasswordReset(email.trim(), code);
+      const result = await authApi.verifyPasswordReset(email.trim(), code);
       setResetToken(result.reset_token);
       setFieldErrors({});
       setStep("password");
@@ -141,7 +137,7 @@ export default function ForgotPasswordPage() {
     setBusy("save");
     setFormError("");
     try {
-      const result = await completePasswordReset(resetToken, password);
+      const result = await authApi.completePasswordReset(resetToken, password);
       notifySuccess("Password updated", "Sign in with your new password.");
       navigate("/sign-in", { replace: true, state: { email: result.email } });
     } catch (reason) {

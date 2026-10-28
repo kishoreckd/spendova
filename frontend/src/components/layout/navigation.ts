@@ -2,6 +2,7 @@ import {
   BarChart3,
   CreditCard,
   Home,
+  Landmark,
   MoreHorizontal,
   Settings,
   Smartphone,
@@ -18,6 +19,7 @@ export const primaryNav = [
 ];
 export const manageNav = [
   { to: "/accounts", label: "Accounts", icon: WalletCards },
+  { to: "/loans", label: "Loans & EMIs", icon: Landmark },
   { to: "/categories", label: "Categories", icon: Tags },
   { to: "/assets", label: "Assets", icon: Smartphone },
   { to: "/settings", label: "Settings", icon: Settings },
@@ -35,6 +37,7 @@ export const pageTitles: Record<string, string> = {
   "/reports": "Reports",
   "/more": "More",
   "/accounts": "Accounts",
+  "/loans": "Loans & EMIs",
   "/categories": "Categories",
   "/assets": "Assets",
   "/settings": "Settings",

@@ -3,10 +3,11 @@
 Revision ID: 20261021_0009
 Revises: 20261021_0008
 """
+
 from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 revision: str = "20261021_0009"
 down_revision: str | None = "20261021_0008"
@@ -15,17 +16,17 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.add_column("transactions", sa.Column("recurring_rule_id", sa.String(36), nullable=True))
-    op.create_foreign_key(
-        "fk_transactions_recurring_rule_id",
-        "transactions", "recurring_rules",
-        ["recurring_rule_id"], ["id"],
-        ondelete="SET NULL",
-    )
-    op.create_index("ix_transactions_recurring_rule_id", "transactions", ["recurring_rule_id"])
+    # Batch mode lets SQLite (tests, local dev) apply the same change PostgreSQL runs directly.
+    with op.batch_alter_table("transactions") as batch:
+        batch.add_column(sa.Column("recurring_rule_id", sa.String(36), nullable=True))
+        batch.create_foreign_key(
+            "fk_transactions_recurring_rule_id", "recurring_rules", ["recurring_rule_id"], ["id"], ondelete="SET NULL"
+        )
+        batch.create_index("ix_transactions_recurring_rule_id", ["recurring_rule_id"])
 
 
 def downgrade() -> None:
-    op.drop_index("ix_transactions_recurring_rule_id", table_name="transactions")
-    op.drop_constraint("fk_transactions_recurring_rule_id", "transactions", type_="foreignkey")
-    op.drop_column("transactions", "recurring_rule_id")
+    with op.batch_alter_table("transactions") as batch:
+        batch.drop_index("ix_transactions_recurring_rule_id")
+        batch.drop_constraint("fk_transactions_recurring_rule_id", type_="foreignkey")
+        batch.drop_column("recurring_rule_id")

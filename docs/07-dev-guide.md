@@ -1,51 +1,53 @@
-# Spendova Engineering Standards
+# Developer guide
 
-These rules are release gates, not optional preferences.
+## Run locally
 
-## Structure
+```powershell
+# Backend (in backend/)
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+Copy-Item .env.example .env          # never commit .env
+.\.venv\Scripts\python.exe -m alembic upgrade head
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload    # http://localhost:8000
 
-- Organize frontend code by feature: auth, accounts, transactions, planning, and assets.
-- Keep shared shadcn primitives in `components/ui`; business logic must stay outside it.
-- Keep route components thin and target fewer than 250 lines per authored component.
-- Put deterministic financial calculations in pure, independently tested functions.
-- Access HTTP only through typed service/query modules.
+# Frontend (in frontend/)
+npm ci
+Copy-Item .env.example .env.local    # VITE_API_URL=http://localhost:8000/api/v1
+npm run dev                          # http://localhost:5173
+```
 
-## Quality gates
+With `AUTH_REQUIRED=false` the backend treats requests without a token as a local development
+user; the frontend still signs in with Firebase, which creates the profile via `POST /auth/google`.
+Email codes print to the backend console when `EMAIL_DELIVERY_MODE=console`. Preview every email
+template with `python scripts/preview_emails.py` (writes `app/email_previews/`).
 
-- TypeScript strict build, lint, and formatting checks must pass.
-- Unit tests are required for financial calculations and validation.
-- Integration tests are required for queries and mutations.
-- Mobile and desktop E2E tests must cover authentication, accounts, transactions, budgets, goals, and assets.
-- Accessibility checks must cover labels, focus, keyboard use, reduced motion, contrast, and screen-reader names.
-- Route-level code splitting and a bundle budget are required before production.
+## Quality gates (CI runs all of these)
+
+| Where | Command |
+|---|---|
+| backend | `python -m ruff check .` · `python -m ruff format --check .` · `pyright` |
+| backend | `python -m alembic upgrade head` · `python -m alembic check` (models match migrations) |
+| backend | `python -m pytest` (the test database is built by running the migrations) |
+| frontend | `npm run check` (prettier, oxlint, `tsc -b`, production build) |
+
+## Structure rules
+
+- Backend: `api/` routes audit and commit; `services/` hold logic and never commit; `schemas/`
+  per feature; one model per file in `db/models/`; pure maths in `core/finance.py`.
+- Frontend: features own their pages, dialogs, and `hooks.ts`; HTTP only through `api/<feature>`;
+  shared app components in `components/common`; shadcn primitives in `components/ui` stay generic.
+- Aim for components under ~250 lines; split dialogs, tabs, schemas, and maths into their own files.
 
 ## Financial and data safety
 
-- Use decimal values or integer minor units for persisted money.
-- Derive balances from immutable balanced ledger entries.
-- Treat transfers separately from income and expenses.
-- Require idempotency for financial writes.
-- Scope every record and query to the authenticated user.
-- Never store full card numbers, passwords, tokens, or Gemini keys in frontend storage.
-- OCR and AI may create drafts or explanations, never automatic cleared transactions.
+- Money is a decimal string on the wire and `Decimal` in Python — never a float in storage.
+- Balances derive from balanced ledger entries; transfers are neither income nor expense.
+- Financial writes take an `Idempotency-Key`.
+- Every query is scoped to the signed-in user; another user's record is a 404.
+- Secrets stay in environment variables. Nothing secret goes in a `VITE_*` variable, the repo, or chat.
 
-## Frontend audit — 2026-09-30
+## UI rules
 
-Passed: strict TypeScript build, shadcn primitives, responsive shell, deterministic planning functions, and production compilation.
-
-Required before production:
-
-Completed in the first architecture pass: `App.tsx` is now a minimal router provider, navigation uses real URLs, the application shell is shared, and major routes are lazy-loaded. The main bundle is below the 500 kB warning threshold.
-
-Remaining requirements:
-
-The transitional `product-pages.tsx` module has been removed. Authentication, dashboard, transactions, planning, reports, accounts, categories, assets, receipts, settings, profile, and More now have independent route modules and production chunks.
-
-Remaining requirements:
-
-1. Replace prototype `localStorage` financial records with authenticated API queries and mutations.
-2. Add Vitest/Testing Library, MSW integration tests, and Playwright E2E tests.
-3. Add error boundaries and route-level empty, error, and offline states.
-4. Complete accessibility and real-device visual QA.
-
-The frontend is a validated interactive prototype, not yet a production release.
+Mobile first (check at 360–400px and desktop), shadcn components, inline field errors (no native
+browser bubbles), loading state on every submit, toasts for outcomes, and no explanatory copy in
+the UI. See `08-ux-plan.md` and the `spendova-ux` skill.

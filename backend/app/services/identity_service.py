@@ -1,14 +1,14 @@
 """Server-side account operations backed by the Firebase Admin SDK.
 
 The Admin SDK needs a service-account key (FIREBASE_SERVICE_ACCOUNT_JSON).
-Keep this module small so tests can replace `identity_provider`.
+Keep this module small so tests can replace `optional_identity_provider`.
 """
 
 import json
 from functools import lru_cache
 from typing import Any, Protocol
 
-from ..core.config import get_settings
+from app.core.config import get_settings
 
 
 class IdentityUnavailable(RuntimeError):
@@ -36,9 +36,7 @@ class FirebaseIdentity:
         try:
             self._app = firebase_admin.get_app("spendova-admin")
         except ValueError:
-            self._app = firebase_admin.initialize_app(
-                credentials.Certificate(service_account), name="spendova-admin"
-            )
+            self._app = firebase_admin.initialize_app(credentials.Certificate(service_account), name="spendova-admin")
 
     def sign_in_methods(self, uid: str) -> set[str]:
         try:
@@ -72,10 +70,7 @@ def _firebase_identity() -> FirebaseIdentity:
 
 
 def optional_identity_provider() -> IdentityProvider | None:
-    """FastAPI dependency: the provider, or None when it is not configured.
-
-    Tests override this dependency with a fake.
-    """
+    """FastAPI dependency: the provider, or None when it is not configured. Tests override it."""
     try:
         return _firebase_identity()
     except IdentityUnavailable:

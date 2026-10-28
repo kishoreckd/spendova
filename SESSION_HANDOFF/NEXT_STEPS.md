@@ -1,50 +1,45 @@
 # Ordered Next Steps
 
-Updated: 21 October 2026 (Asia/Kolkata)
+Updated: 28 October 2026 (Asia/Kolkata)
 
-## 1. Release the 21 October work
+## 1. Release the restructure
 
-- Review and commit the uncommitted changes.
-- Deploy the backend first so Railway runs migrations through `20261021_0011`, then the frontend.
-- On a real iPhone and Android phone, check: transaction sheet, date picker,
-  toasts, asset goal, budget/bill/goal dialogs, category edit, Excel export.
+- Review `git status` on `refactor/vaultessa-structure`, commit, and open a PR to `main`.
+- Create the backend Vercel project (Root Directory `backend`) and add every variable from
+  `backend/.env.production.example`: `DATABASE_URL` (Supabase transaction pooler 6543),
+  `AUTH_REQUIRED=true`, `FIREBASE_PROJECT_ID`, `FIREBASE_SERVICE_ACCOUNT_JSON`, 32+ character
+  `OTP_SECRET` and `DATA_ENCRYPTION_KEY`, Brevo SMTP (`SMTP_USERNAME`, `SMTP_PASSWORD` = SMTP key,
+  verified `EMAIL_FROM`), `APP_URL`, `CORS_ORIGINS`, `CRON_SECRET`, optional `EMAIL_TEST_API_KEY`.
+  The API will not boot without the required ones.
+- Add GitHub secret `PRODUCTION_DATABASE_URL` (Supabase session pooler 5432); merging to `main`
+  then runs migrations 0006–0014.
+- Point the frontend's `VITE_API_URL` at the backend Vercel URL + `/api/v1`, then redeploy it.
+- Verify: `/health`, `/health/email`, a `POST /health/email` test, sign-up code, forgot password.
+- Rotate the Supabase password that appeared in an earlier chat.
+- Real-device QA (iPhone + Android): loan form and preview, loan detail charts, Pay EMI, Plan › Bills,
+  transaction sheet, toasts.
 
-## 1a. Configure email and password reset
+## 2. Finance assistant foundation
 
-- Railway secrets: `FIREBASE_SERVICE_ACCOUNT_JSON` (Firebase console → Project
-  settings → Service accounts → Generate new private key, pasted as one line),
-  `EMAIL_DELIVERY_MODE=smtp`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`,
-  `SMTP_PASSWORD`, `EMAIL_FROM`, and `APP_URL` (the Vercel address).
-- Use a sending provider with SPF/DKIM on a domain you own so codes avoid spam.
-- Add per-IP rate limiting to the public reset endpoints (only per-email
-  throttling exists today).
-
-## 2. Production safety (before real users)
-
-- Refuse to start when `ENVIRONMENT=production` unless `AUTH_REQUIRED=true`, the
-  OTP secret is changed, and SMTP is configured. Today every setting defaults
-  to development, which allows `X-User-Id` impersonation and logs OTP codes.
-- Rotate the database password that appeared in an earlier chat.
-- Handle concurrent requests: duplicate idempotency keys and the default-category
-  insert in `GET /categories` can both raise 500s.
-- Validate `year`/`month` on `/dashboard`; compute "today" in the user's time zone.
-- Run backend tests against PostgreSQL in CI (SQLite ignores foreign keys).
+- `GET /api/v1/insights/snapshot`: one deterministic JSON of income, spending, budgets, goals,
+  bills, loans overview, and assets (see `docs/12-loans-and-finance-assistant.md`).
+- Then the chat UI with tool calls to `/loans/preview` and the purchase planner; no model arithmetic.
 
 ## 3. Finance model
 
-- Transaction edit and void in the UI; transaction table with filters and
-  pagination on desktop.
-- Budget and commitment editing; recurring worker.
-- Goal target dates instead of month counts.
-- Credit card statements, amortization schedules, investment valuations, splits, refunds.
+- Ledger split for EMIs (principal to a loan liability, interest/fees as expenses).
+- Loan prepayment/part-payment (reduce tenure or EMI) and floating-rate changes.
+- Transaction edit and void in the UI; desktop table with filters.
+- Budget, bill, and loan editing; goal target dates.
+- Credit card statements and bill payments.
 
 ## 4. Notifications and privacy
 
-- Persist notification preferences in PostgreSQL; outbox + reminder worker.
-- Account deletion and a server-side versioned export.
+- EMI and bill reminders through the email outbox; persist notification preferences.
+- Account deletion and a server-side export.
 
 ## 5. Release hardening
 
-- Frontend component and end-to-end tests for money workflows.
-- Rate limiting, request IDs, monitoring, backup/restore rehearsal.
-- Dependency scanning and protected-branch rules.
+- Vitest + Testing Library for forms/hooks; Playwright for sign-in → add loan → pay EMI.
+- Run backend tests against PostgreSQL in CI as well as SQLite.
+- Request IDs, monitoring, backup/restore rehearsal, dependency scanning.

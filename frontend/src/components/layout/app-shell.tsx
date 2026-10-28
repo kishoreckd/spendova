@@ -6,9 +6,14 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { TransactionSheet } from "@/components/transaction-sheet";
-import { greeting, manageNav, pageTitles, primaryNav } from "@/app/navigation";
-import { PageActionsSlot } from "@/app/page-actions-context";
+import { TransactionSheet } from "@/features/transactions/transaction-sheet";
+import {
+  greeting,
+  manageNav,
+  pageTitles,
+  primaryNav,
+} from "@/components/layout/navigation";
+import { PageActionsSlot } from "@/components/layout/page-actions-context";
 import { useAuth } from "@/features/auth/auth-context";
 export type ShellContext = { openTransaction: () => void };
 

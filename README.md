@@ -1,44 +1,46 @@
 # Spendova
 
-> Resuming this project in a new session? Start with
-> [`SESSION_HANDOFF/START_HERE.md`](SESSION_HANDOFF/START_HERE.md).
+> Resuming in a new session? Start with [`SESSION_HANDOFF/START_HERE.md`](SESSION_HANDOFF/START_HERE.md)
+> and [`CLAUDE.md`](CLAUDE.md).
 
-Spendova is now an executable mobile-first personal finance application with a React/shadcn frontend and FastAPI foundation.
+Spendova is a mobile-first personal finance app: accounts and ledger-backed transactions, budgets,
+goals, bills and expected income, assets with cost per day, and loans/EMIs with full interest
+schedules. React + shadcn frontend, FastAPI + PostgreSQL backend, Firebase Authentication.
 
-## Repository and deployment layout
+## Repository layout
 
-Spendova intentionally uses one repository with independently deployable apps:
+| Path | What | Deploys to |
+|---|---|---|
+| `frontend/` | React 19 + Vite app | Vercel (Root Directory `frontend`) |
+| `backend/` | FastAPI API (serverless) | Vercel (Root Directory `backend`) + Supabase PostgreSQL |
+| `docs/` | Product, architecture, rules, data model, API, roadmap | — |
+| `.claude/skills/` | Project conventions for AI-assisted work | — |
 
-- `frontend/` — React/Vite application for Vercel or Firebase Hosting.
-- `backend/` — FastAPI service for Railway.
-
-In Railway, connect `kishoreckd/spendova` and set the service **Root Directory**
-to `/backend`. In Vercel, connect the same repository and set **Root Directory**
-to `frontend`. This keeps changes atomic while allowing each platform to build
-and deploy only the application it owns.
-
-## Run the application
+## Run locally
 
 ```powershell
-cd frontend
-npm install
+# API (in backend/) — http://localhost:8000/api/v1, docs at /docs
+.\.venv\Scripts\python.exe -m alembic upgrade head
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
+
+# Web (in frontend/) — http://localhost:5173
 npm run dev
 ```
 
-Open `http://localhost:5173`. To run the API and PostgreSQL together, use `docker compose up --build` from the project root. API documentation is then available at `http://localhost:8000/docs`.
+Full setup, checks, and rules: [docs/07-dev-guide.md](docs/07-dev-guide.md). `docker compose up --build`
+runs the API with PostgreSQL.
 
-## Verify
+## Documentation
 
-Run `npm run build` in `frontend`, and `py -m pytest` in `backend` after installing `backend/requirements.txt`.
-
-Planning is separated by concern:
-
-- [PRODUCT_PLAN.md](./PRODUCT_PLAN.md) — vision, architecture, product behavior, and delivery phases.
-- [UI_UX_PLAN.md](./UI_UX_PLAN.md) — dashboards, screens, interactions, responsive behavior, and shadcn/ui mapping.
-- [DECISIONS.md](./DECISIONS.md) — confirmed choices and financial behavior decisions.
-- [FINANCIAL_RULES.md](./FINANCIAL_RULES.md) — authoritative calculations, ledger behavior, and edge cases.
-- [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md) — relational entities, constraints, ownership, and indexes.
-- [DOCUMENTATION_ROADMAP.md](./DOCUMENTATION_ROADMAP.md) — completed and upcoming specifications.
-- [BRAND.md](./BRAND.md) — name meaning, positioning, messaging, and future logo direction.
-
-The proposed product is a mobile-first personal finance and purchase-planning application built with React, TypeScript, shadcn/ui, FastAPI, PostgreSQL, Firebase Authentication, and an optional privacy-controlled Gemini insight layer.
+1. [Product plan](docs/01-product-plan.md)
+2. [Architecture](docs/02-architecture.md)
+3. [Financial rules](docs/03-financial-rules.md)
+4. [Data model](docs/04-data-model.md)
+5. [API specification](docs/05-api-spec.md)
+6. [Roadmap](docs/06-roadmap.md)
+7. [Developer guide](docs/07-dev-guide.md)
+8. [UX plan](docs/08-ux-plan.md)
+9. [Brand](docs/09-brand.md)
+10. [Decisions](docs/10-decisions.md)
+11. [Email delivery](docs/11-email-delivery.md)
+12. [Loans, EMIs, and the finance assistant](docs/12-loans-and-finance-assistant.md)

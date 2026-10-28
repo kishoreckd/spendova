@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { DatePicker } from "@/components/date-picker";
-import { MoneyInput } from "@/components/money-input";
+import { DatePicker } from "@/components/common/date-picker";
+import { MoneyInput } from "@/components/common/money-input";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -13,10 +13,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Field, FormAlert } from "@/components/ui/field";
+import { Field, FormAlert } from "@/components/common/form-field";
 import { Input } from "@/components/ui/input";
 import { useMoney } from "@/hooks/use-money";
-import { addGoalContribution, type GoalItem } from "@/lib/api";
+import type { GoalItem } from "@/api/goals/types";
 import { localDateISO } from "@/lib/format";
 import {
   applyServerErrors,
@@ -25,6 +25,7 @@ import {
   notifySuccess,
   pastOrToday,
 } from "@/lib/forms";
+import { useContributeToGoal } from "./hooks";
 
 const schema = z.object({
   amount: money(),
@@ -36,14 +37,13 @@ type Values = z.input<typeof schema>;
 export function GoalContributionDialog({
   goal,
   onOpenChange,
-  onSaved,
 }: {
   /** The goal receiving money; the dialog is open while this is set. */
   goal: GoalItem | null;
   onOpenChange: (open: boolean) => void;
-  onSaved: (goalId: string) => void;
 }) {
   const currency = useMoney();
+  const contribute = useContributeToGoal();
   const [formError, setFormError] = useState("");
   const [today] = useState(() => localDateISO());
   const remaining = goal
@@ -78,13 +78,15 @@ export function GoalContributionDialog({
       return;
     }
     try {
-      await addGoalContribution(goal.id, {
-        amount: parsed.amount,
-        contributed_on: parsed.date,
-        note: parsed.note || undefined,
+      await contribute.mutateAsync({
+        goalId: goal.id,
+        body: {
+          amount: parsed.amount,
+          contributed_on: parsed.date,
+          note: parsed.note || undefined,
+        },
       });
       notifySuccess(`${currency.format(parsed.amount)} added`, goal.name);
-      onSaved(goal.id);
       changeOpen(false);
     } catch (reason) {
       setFormError(

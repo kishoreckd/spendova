@@ -211,7 +211,7 @@ Allow per-notification control, quiet hours, and email/push/in-app preferences.
 
 ## 4. Mobile-first information architecture
 
-Detailed screen layouts, dashboard states, interactions, and shadcn/ui mappings are maintained separately in [UI_UX_PLAN.md](./UI_UX_PLAN.md). This section is only the product-level navigation summary.
+Detailed screen layouts, dashboard states, interactions, and shadcn/ui mappings are maintained separately in [docs/08-ux-plan.md](./08-ux-plan.md). This section is only the product-level navigation summary.
 
 Use a five-item bottom navigation:
 
@@ -450,7 +450,7 @@ Exit: AI adds understandable advice without controlling financial calculations.
 
 ## 13. Confirmed decisions and remaining questions
 
-Confirmed choices are recorded in [DECISIONS.md](./DECISIONS.md).
+Confirmed choices are recorded in [docs/10-decisions.md](./10-decisions.md).
 
 1. Is offline transaction entry a launch requirement?
 2. Which notifications are essential, and should they use email, push, or both?

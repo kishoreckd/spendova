@@ -1,10 +1,12 @@
 import { ThemeProvider } from "next-themes";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "react-router-dom";
 import { SpeedInsights } from "@vercel/speed-insights/react";
 import { Toaster } from "@/components/ui/sonner";
 import { router } from "@/app/router";
 import { AuthProvider } from "@/features/auth/auth-context";
 import { useIsDesktop } from "@/hooks/use-media-query";
+import { queryClient } from "@/lib/query-client";
 
 export default function App() {
   const isDesktop = useIsDesktop();
@@ -16,9 +18,11 @@ export default function App() {
       disableTransitionOnChange
       storageKey="spendova-theme"
     >
-      <AuthProvider>
-        <RouterProvider router={router} />
-      </AuthProvider>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <RouterProvider router={router} />
+        </AuthProvider>
+      </QueryClientProvider>
       {/*
         Desktop: top-right under the 64px header, clear of the avatar and of
         the transaction panel's save buttons. Mobile: full-width at the top,

@@ -1,98 +1,69 @@
 ﻿# Current Implementation Status
 
-Updated: 21 October 2026 (Asia/Kolkata)
+Updated: 28 October 2026 (Asia/Kolkata)
 
 ## Repository and verification
 
-- Repository: `https://github.com/kishoreckd/spendova.git`, branch `main`.
-- Frontend `npm run check` passes (Prettier, Oxlint, `tsc -b`, Vite build).
-  Oxlint reports only the three long-standing shadcn Fast Refresh warnings.
-- Backend: 32 tests pass; Pyright previously reported 0 errors and 0 warnings.
-- Alembic has one linear head: `20261021_0011`.
-- The 21 October work is not yet committed. Review `git status` before committing.
+- Repository: `https://github.com/kishoreckd/spendova.git`. Work is on branch
+  `refactor/vaultessa-structure` and is **not committed yet** — review `git status` first.
+- Backend 0.8.0: 96 tests pass; `ruff check`, `ruff format --check`, `pyright`, and
+  `alembic check` are clean. CI (`.github/workflows/ci.yml`) runs all of these plus migrations.
+- Frontend: `npm run check` passes (Prettier, Oxlint, `tsc -b`, Vite build). Oxlint reports only
+  the three long-standing shadcn Fast Refresh warnings.
+- Alembic head: `20261028_0014` (0012 audit logs, 0013 email outbox, 0014 loans).
 
-## Backend (FastAPI 0.7.0)
+## What changed on 28 October 2026
 
-Implemented:
+The project now follows the Vaultessa structure (see `docs/02-architecture.md`):
 
-- Firebase identity verification, Google/email user sync, six-digit email codes.
-- Profile, onboarding, locale, currency, and time zone.
-- Accounts, categories (create, edit, archive), transactions with balanced postings.
-  Transactions and recurring rules reference accounts by owned IDs; readable
-  source/destination names remain snapshots. Duplicate account names are safe.
-- Live account balances derive from opening balance plus transactions. Loans,
-  fixed deposits, and recurring deposits include finance details and projections.
-- Goals with contributions; assets with create, edit, archive.
-- Asset replacement goal: optional expected life in months **or** target cost per
-  day (never both; enforced by schema, endpoint, and a database check constraint).
-  `replacement_goal` returns target cost per day, days needed, reached-on date,
-  days remaining, progress percent, and reached flag. Logic lives in
-  `app/domain.py` (`replacement_goal`, `cost_per_day`, `days_owned`, `add_months`).
-- Budgets: create, delete, and status with total and per-category spent/remaining.
-  Budget lines accept expense categories only.
-- Recurring bills, income, and investments: create, list, stop, mark paid/received,
-  create the transaction, and advance the next due date.
-- Forgot password (`app/api/password_reset.py`): `request` â†’ emailed 6-digit code
-  (identical response for unknown emails, mail sent in background, 60 s silent
-  throttle), `verify` â†’ single-use reset token (5 attempts, code spent on success),
-  `complete` â†’ Firebase Admin sets the password, revokes other sessions, and sends a
-  "password changed" email. Google-only accounts receive a "sign in with Google" email.
-  Requires `FIREBASE_SERVICE_ACCOUNT_JSON`; without it, production returns 503 and
-  development can test the first two steps only.
-- Branded HTML + plain-text emails in `app/email_templates.py` (verification,
-  reset code, Google notice, password changed); `app/email.py` supports SMTP on
-  587 (STARTTLS) and 465 (TLS) and refuses console delivery in production.
-- Migration head is `20261021_0011` (account-ID references).
+- **Backend layering:** `api/<feature>.py` (audit + single commit), `services/<feature>_service.py`
+  (logic, never commits), `schemas/<feature>.py`, `db/models/<name>_model.py`, `core/` (application,
+  config, deps, errors, security, rate_limit, schema, finance), `constants/`.
+- **Errors:** envelope `data: {code, details: [{path, message}]}`; validation errors are HTTP 400 `VALIDATION_ERROR`.
+- **Security:** audit log, per-IP rate limits (global + auth), security headers, production config guard.
+- **Email:** transactional outbox (queued in the same transaction, sent after commit, retried,
+  AES-GCM sealed); Jinja templates with dark mode; `scripts/preview_emails.py`.
+- **Tests:** the database is built through the real migrations (SQLite with foreign keys on).
+- **Loans & EMIs (new):** `loans` table, reducing-balance maths in `core/finance.py`, `/loans`
+  endpoints (list, overview, preview, create, schedule, pay EMI, close). Each tracked loan creates a
+  monthly bill in the *Loans & EMIs* category; paying posts an expense and advances progress.
+  EMIs due before today are assumed paid unless the user says otherwise.
+- **Frontend:** `src/api/<feature>/{api,types}.ts` + `api/client.ts`; TanStack Query hooks per
+  feature (`features/<feature>/hooks.ts`, keys in `lib/query-client.ts`); window events removed;
+  `components/common` and `components/layout`; large files split (planning page into tabs,
+  transaction sheet, bill form, accounts page, reports analysis).
+- **Loans UI:** `/loans` (in More): overview (EMIs/month, share of income, owed, interest left, due
+  this month, debt-free date), loan cards with Pay EMI, add form with live EMI/interest preview
+  (rate or EMI → effective rate), detail with principal-vs-interest and balance charts plus the
+  schedule table, close loan. Dashboard shows an “EMIs due this month” card. Excel export has a
+  Loans & EMIs sheet. Verified in light/dark at 390px and 1280px.
+- **Docs:** numbered `docs/01…12`, `CLAUDE.md`, `.claude/skills/` (backend-module,
+  frontend-feature, database-migration, money-math, spendova-ux, email-template, security-checklist).
 
-Database state:
+## Known limits
 
-- Code head: `20261021_0011`.
-- Connected Supabase was last confirmed at `20261020_0005`. Migrations `0006`
-  through `0011` must run before the new backend serves traffic; Railway's pre-deploy
-  `alembic upgrade head` does this. **Deploy the backend before the frontend.**
+- EMI payments post as one expense; the principal/interest split is shown, not posted.
+- Notification toggles in Settings are placeholders.
+- No frontend unit/E2E tests yet.
 
-## Frontend
+## Database and deployment state
 
-Shared building blocks (use these for any new form):
-
-- `components/ui/field.tsx` â€” `Field` (label, inline error, optional marker) and `FormAlert`.
-- `lib/forms.ts` â€” zod helpers (`money`, `optionalMoney`, `requiredText`,
-  `pastOrToday`), `controlProps`, `applyServerErrors`, `notifySuccess`, `notifyError`.
-- `components/ui/button.tsx` â€” `loading` prop (spinner, disabled, `aria-busy`).
-- `components/tile-picker.tsx` â€” tiles (categories) or chips (asset/account types)
-  with inline "+ New".
-- `components/date-picker.tsx` â€” shadcn Popover + Calendar, min/max, Today/Yesterday.
-- `components/money-input.tsx`, `components/confirm-dialog.tsx`.
-- `hooks/use-money.ts` â€” currency/locale formatting from the profile.
-- `app/page-actions.tsx` â€” renders page buttons into the shell header.
-- Toasts: Sonner, mounted in `App.tsx`; top-right on desktop, full-width top on mobile.
-
-Feedback conventions: forms use `noValidate` + react-hook-form + zod; field errors
-appear under the field after blur or submit; non-field errors use `FormAlert`;
-successful saves and page-level actions show a toast.
-
-Screens:
-
-- Transaction dialog: centered on desktop and full-screen on mobile; category
-  quick-create, account-ID transfers, commitment linking, date picker, and
-  "Save & add another".
-- Plan: budgets (create, per-category progress, delete), goals (add money, delete),
-  purchase planner that saves a real goal, bills (create, due labels, monthly
-  total, stop).
-- Assets: replacement goal with live preview, progress, edit, custom types, confirm removal.
-- Categories: Expense/Income tabs, tap to edit, live preview, archive from edit dialog.
-- Accounts: multiple bank/card/cash/loan/FD/RD/investment accounts, live balances,
-  deposit maturity projections, net worth, and archive confirmation.
-- Transactions: grouped by day with category icons, search, skeleton loading.
-- Reports: loading state, uses all transactions (paginated), compact mobile metrics.
-- Settings: Excel (.xlsx, 8 sheets) and JSON export, theme (light/dark/auto),
-  notification toggles marked "Coming soon", sign out.
-- Explanatory copy was removed app-wide at the user's request. Keep new UI terse.
-- Dark mode persists via `next-themes`; the dashboard greets the signed-in user.
-
-## Services and deployment
-
-- Frontend is live on Vercel (`spendova-jet.vercel.app`).
-- Railway backend uses root `/backend`; production requires `AUTH_REQUIRED=true`,
-  `ENVIRONMENT=production`, managed secrets, exact CORS origins, SMTP delivery.
-- Firebase project `spendova-a6d20`; Supabase PostgreSQL.
+- **The backend runs on Vercel, not Railway** (user decision, 28 Oct). `railway.json` was removed;
+  `pyproject.toml` has `[tool.vercel] entrypoint = "app.main:app"`, `backend/.vercelignore` trims
+  the bundle, `backend/vercel.json` schedules the email-retry cron. With `VERCEL=1` the app uses
+  no connection pool and no in-process worker. See `docs/02-architecture.md#deployment-vercel--supabase`.
+- Migrations: `.github/workflows/migrate-database.yml` runs `alembic upgrade head` on push to main
+  (needs GitHub secret `PRODUCTION_DATABASE_URL`, Supabase session pooler 5432). Supabase was last
+  confirmed at `20261020_0005`, so 0006–0014 will run on the first push.
+- Email works like Vaultessa: local SMTP into Mailpit (`docker compose up -d mailpit`, inbox at
+  http://127.0.0.1:8026); production Brevo SMTP. Templates: `backend/.env.example` and
+  `backend/.env.production.example`. `/health/email` checks SMTP; `POST /health/email` sends a test.
+- Production refuses to start unless `AUTH_REQUIRED=true`, `FIREBASE_PROJECT_ID`, 32+ character
+  `OTP_SECRET` and `DATA_ENCRYPTION_KEY`, `EMAIL_DELIVERY_MODE=smtp`, and `SMTP_HOST`,
+  `SMTP_USERNAME`, `SMTP_PASSWORD`, `EMAIL_FROM` are set. Also set `CRON_SECRET`.
+- The local SQLite database also needs `alembic upgrade head` (the app no longer calls `create_all`).
+  The user's private `backend/.env` was not changed; it may still use console email mode.
+- `frontend/.env.local` currently points `VITE_API_URL` at the old production API; point it at
+  `http://localhost:8000/api/v1` locally, and at the backend Vercel URL + `/api/v1` in production.
+- Backend tests: 96 pass (adds email health, cron, and production-config tests).
+- Frontend live on Vercel (`spendova-jet.vercel.app`); Firebase project `spendova-a6d20`.

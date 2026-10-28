@@ -1,7 +1,7 @@
 import { useContext } from "react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { PageActionsSlot } from "@/app/page-actions-context";
+import { PageActionsSlot } from "@/components/layout/page-actions-context";
 
 /** Places a page's primary buttons beside its title in the shell header. */
 export function PageActions({ children }: { children: ReactNode }) {

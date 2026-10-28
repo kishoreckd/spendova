@@ -1,0 +1,16 @@
+# Keep the serverless bundle small: only the app, migrations, and config are needed at runtime.
+.venv/
+.env
+.env.*
+!.env.example
+!.env.production.example
+*.db
+tests/
+scripts/
+app/email_previews/
+.pytest_cache/
+.ruff_cache/
+.pyright/
+**/__pycache__/
+Dockerfile
+.dockerignore

@@ -1,73 +1,57 @@
-"""Shared API response contract.
+"""Shared wire format for all JSON API responses (204 has no body).
 
-The filename is retained for compatibility with the reference project, though
-this module formats responses rather than validating request JSON.
+Every response is `{"status": "success" | "error", "message": str, "data": ...}`.
+Errors carry `data: {"code": "...", "details": [{"path": ..., "message": ...}]}`.
 """
 
-from collections.abc import Mapping
-from typing import Any, Generic, Literal, TypeVar
+from typing import Any, Literal
 
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict, ValidationError
+from starlette.background import BackgroundTask
 
-T = TypeVar("T")
-
-
-class ApiResponse(BaseModel, Generic[T]):
-    """OpenAPI-visible envelope used by every JSON endpoint."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    status: Literal["success", "error"]
-    message: str
-    data: T | None = None
 
 class JsonResponse:
     @staticmethod
+    def body(status: Literal["success", "error"], message: str, data: Any = None) -> dict:
+        return {"status": status, "message": message, "data": data}
+
+    @classmethod
     def create(
-        response_status: Literal["success", "error"],
+        cls,
+        status: Literal["success", "error"],
         message: str,
-        data: Any = None,
-        status_code: int = 200,
-        headers: Mapping[str, str] | None = None,
+        data: Any,
+        status_code: int,
+        headers=None,
+        background: BackgroundTask | None = None,
     ) -> JSONResponse:
-        body = ApiResponse[Any](status=response_status, message=message, data=data)
         return JSONResponse(
-            content=jsonable_encoder(body.model_dump()),
+            content=jsonable_encoder(cls.body(status, message, data)),
             status_code=status_code,
             headers=headers,
+            background=background,
         )
 
     @classmethod
-    def success(cls, message: str, data: Any = None, status_code: int = 200, headers: Mapping[str, str] | None = None) -> dict[str, Any]:
-        """Return data for FastAPI to validate against the route response model.
-
-        Success status codes belong on the route decorator. Keeping validation
-        in FastAPI preserves computed fields, decimal formatting, and OpenAPI.
-        The final two arguments remain accepted for compatibility with the
-        reference helper while routes are migrated.
-        """
-        _ = status_code, headers
-        return {"status": "success", "message": message, "data": data}
+    def success(cls, message: str, data=None, status_code: int = 200, headers=None, background=None) -> JSONResponse:
+        return cls.create("success", message, data, status_code, headers, background)
 
     @classmethod
-    def error(cls, message: str, data: Any = None, status_code: int = 400, headers: Mapping[str, str] | None = None) -> JSONResponse:
-        return cls.create("error", message, data, status_code, headers=headers)
+    def error(cls, message: str, data=None, status_code: int = 400, headers=None, background=None) -> JSONResponse:
+        return cls.create("error", message, data, status_code, headers, background)
 
-    @classmethod
-    def validation_error(cls, error: ValidationError, status_code: int = 422, headers: Mapping[str, str] | None = None) -> JSONResponse:
-        errors = [
-            {
-                "field": " -> ".join(str(part) for part in item["loc"]),
-                "message": item["msg"],
-                "error_type": item["type"],
-            }
-            for item in error.errors()
-        ]
-        return cls.error(
-            message="Validation error",
-            data=errors,
-            status_code=status_code,
-            headers=headers,
-        )
+
+class ApiJSONResponse(JSONResponse):
+    """Default response class: wraps a route's validated DTO in the shared envelope.
+
+    A dict carrying a string `message` key uses it as the envelope message.
+    """
+
+    def render(self, content: Any) -> bytes:
+        message = "Success"
+        data = content
+        if isinstance(content, dict) and isinstance(content.get("message"), str):
+            message = content["message"]
+            data = {key: value for key, value in content.items() if key != "message"} or None
+        return super().render(JsonResponse.body("success", message, data))

@@ -3,10 +3,11 @@
 Revision ID: 20261018_0001
 Revises:
 """
+
 from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 revision: str = "20261018_0001"
 down_revision: str | None = None
@@ -101,7 +102,9 @@ def upgrade() -> None:
     op.create_table(
         "ledger_entries",
         sa.Column("id", sa.String(36), primary_key=True),
-        sa.Column("transaction_id", sa.String(36), sa.ForeignKey("transactions.id", ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "transaction_id", sa.String(36), sa.ForeignKey("transactions.id", ondelete="CASCADE"), nullable=False
+        ),
         sa.Column("sequence", sa.Integer(), nullable=False),
         sa.Column("target", sa.String(100), nullable=False),
         sa.Column("side", sa.String(10), nullable=False),

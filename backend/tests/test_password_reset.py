@@ -1,17 +1,13 @@
-import os
-
-os.environ["DATABASE_URL"] = "sqlite:///:memory:"
-os.environ["AUTH_REQUIRED"] = "false"
-
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
-from fastapi.testclient import TestClient
 
-from app import email_templates
-from app.api import password_reset
 from app.main import app
-from app.services.identity import optional_identity_provider
+from app.services import email_templates
+from app.services.identity_service import optional_identity_provider
+from tests.helpers import API, data, error, sign_up
+
+RESET = f"{API}/auth/password-reset"
 
 
 class FakeIdentity:
@@ -31,13 +27,6 @@ class FakeIdentity:
 
 
 @pytest.fixture
-def mailbox(monkeypatch):
-    sent: list[tuple[str, email_templates.EmailContent]] = []
-    monkeypatch.setattr(password_reset, "send_in_background", lambda to, content: sent.append((to, content)))
-    return sent
-
-
-@pytest.fixture
 def identity():
     fake = FakeIdentity({"password"})
     app.dependency_overrides[optional_identity_provider] = lambda: fake
@@ -45,94 +34,84 @@ def identity():
     app.dependency_overrides.pop(optional_identity_provider, None)
 
 
-def body(response):
-    return response.json()["data"]
+def test_full_reset_flow_changes_password_and_signs_out_other_sessions(api, mailbox, identity):
+    sign_up(api, "reset-user", email="Asha@Example.com", name="Asha Rao")
+    requested = api.post(f"{RESET}/request", json={"email": " asha@example.COM "})
+    code = data(requested)["development_code"]
+    assert code and len(code) == 6
+    to, subject, text, html = mailbox[-1]
+    assert to == "Asha@Example.com"
+    assert code in subject and code in text and html and code in html
+    assert "Hi Asha," in text
+
+    wrong = "000000" if code != "000000" else "111111"
+    miss = api.post(f"{RESET}/verify", json={"email": "asha@example.com", "code": wrong})
+    assert miss.status_code == 400
+    assert "4 attempts left" in error(miss)["message"]
+
+    token = data(api.post(f"{RESET}/verify", json={"email": "asha@example.com", "code": code}))["reset_token"]
+    assert api.post(f"{RESET}/verify", json={"email": "asha@example.com", "code": code}).status_code == 400
+
+    weak = api.post(f"{RESET}/complete", json={"reset_token": token, "new_password": "password"})
+    assert weak.status_code == 400
+    assert error(weak)["details"][0]["message"] == "Use at least one letter and one number"
+
+    done = api.post(f"{RESET}/complete", json={"reset_token": token, "new_password": "NewPass2026"})
+    assert data(done)["email"] == "Asha@Example.com"
+    assert identity.passwords == {"reset-user": "NewPass2026"}
+    assert identity.signed_out == ["reset-user"]
+    assert mailbox[-1][1] == "Your Spendova password was changed"
+
+    replay = api.post(f"{RESET}/complete", json={"reset_token": token, "new_password": "Another2026"})
+    assert replay.status_code == 400
 
 
-def sign_up(client: TestClient, uid: str, email: str) -> None:
-    client.post("/api/v1/auth/google", headers={"X-User-Id": uid}, json={"email": email, "name": "Asha Rao"})
+def test_unknown_email_gets_the_same_answer_and_no_mail(api, mailbox, identity):
+    response = api.post(f"{RESET}/request", json={"email": "nobody@example.com"})
+    assert data(response)["sent"] is True
+    assert data(response)["development_code"] is None
+    assert mailbox == []
 
 
-def test_full_reset_flow_changes_password_and_signs_out_other_sessions(mailbox, identity):
-    with TestClient(app) as client:
-        sign_up(client, "reset-user", "Asha@Example.com")
-        requested = client.post("/api/v1/auth/password-reset/request", json={"email": " asha@example.COM "})
-        assert requested.status_code == 200
-        code = body(requested)["development_code"]
-        assert code and len(code) == 6
-        to, message = mailbox[-1]
-        assert to == "Asha@Example.com"
-        assert code in message.subject and code in message.html and code in message.text
-        assert "Hi Asha," in message.text
-
-        wrong = "000000" if code != "000000" else "111111"
-        miss = client.post("/api/v1/auth/password-reset/verify", json={"email": "asha@example.com", "code": wrong})
-        assert miss.status_code == 400
-        assert "4 attempts left" in miss.json()["message"]
-
-        verified = client.post("/api/v1/auth/password-reset/verify", json={"email": "asha@example.com", "code": code})
-        assert verified.status_code == 200
-        token = body(verified)["reset_token"]
-        reused_code = client.post("/api/v1/auth/password-reset/verify", json={"email": "asha@example.com", "code": code})
-        assert reused_code.status_code == 400
-
-        weak = client.post("/api/v1/auth/password-reset/complete", json={"reset_token": token, "new_password": "password"})
-        assert weak.status_code == 422
-
-        done = client.post("/api/v1/auth/password-reset/complete", json={"reset_token": token, "new_password": "NewPass2026"})
-        assert done.status_code == 200
-        assert body(done)["email"] == "Asha@Example.com"
-        assert identity.passwords == {"reset-user": "NewPass2026"}
-        assert identity.signed_out == ["reset-user"]
-        assert mailbox[-1][1].subject == "Your Spendova password was changed"
-
-        replay = client.post("/api/v1/auth/password-reset/complete", json={"reset_token": token, "new_password": "Another2026"})
-        assert replay.status_code == 400
-
-
-def test_unknown_email_gets_the_same_answer_and_no_mail(mailbox, identity):
-    with TestClient(app) as client:
-        response = client.post("/api/v1/auth/password-reset/request", json={"email": "nobody@example.com"})
-        assert response.status_code == 200
-        assert body(response)["sent"] is True
-        assert body(response)["development_code"] is None
-        assert mailbox == []
-
-
-def test_google_only_account_gets_a_sign_in_notice_instead_of_a_code(mailbox, identity):
+def test_google_only_account_gets_a_sign_in_notice_instead_of_a_code(api, mailbox, identity):
     identity.methods = {"google.com"}
-    with TestClient(app) as client:
-        sign_up(client, "google-user", "google-only@example.com")
-        response = client.post("/api/v1/auth/password-reset/request", json={"email": "google-only@example.com"})
-        assert response.status_code == 200
-        assert body(response)["development_code"] is None
-        assert mailbox[-1][1].subject == "Your Spendova account uses Google sign-in"
+    sign_up(api, "google-user", email="google-only@example.com")
+    response = api.post(f"{RESET}/request", json={"email": "google-only@example.com"})
+    assert data(response)["development_code"] is None
+    assert mailbox[-1][1] == "Your Spendova account uses Google sign-in"
 
 
-def test_repeat_requests_are_throttled_silently(mailbox, identity):
-    with TestClient(app) as client:
-        sign_up(client, "throttled", "throttled@example.com")
-        first = client.post("/api/v1/auth/password-reset/request", json={"email": "throttled@example.com"})
-        second = client.post("/api/v1/auth/password-reset/request", json={"email": "throttled@example.com"})
-        assert first.status_code == second.status_code == 200
-        assert body(second)["development_code"] is None
-        assert len(mailbox) == 1
+def test_repeat_requests_are_throttled_silently(api, mailbox, identity):
+    sign_up(api, "throttled", email="throttled@example.com")
+    first = api.post(f"{RESET}/request", json={"email": "throttled@example.com"})
+    second = api.post(f"{RESET}/request", json={"email": "throttled@example.com"})
+    assert first.status_code == second.status_code == 200
+    assert data(second)["development_code"] is None
+    assert len(mailbox) == 1
 
 
-def test_code_locks_after_five_wrong_attempts(mailbox, identity):
-    with TestClient(app) as client:
-        sign_up(client, "guesser", "guesser@example.com")
-        code = body(client.post("/api/v1/auth/password-reset/request", json={"email": "guesser@example.com"}))["development_code"]
-        wrong = "000000" if code != "000000" else "111111"
-        for _ in range(5):
-            client.post("/api/v1/auth/password-reset/verify", json={"email": "guesser@example.com", "code": wrong})
-        locked = client.post("/api/v1/auth/password-reset/verify", json={"email": "guesser@example.com", "code": code})
-        assert locked.status_code == 429
+def test_code_locks_after_five_wrong_attempts(api, mailbox, identity):
+    sign_up(api, "guesser", email="guesser@example.com")
+    code = data(api.post(f"{RESET}/request", json={"email": "guesser@example.com"}))["development_code"]
+    wrong = "000000" if code != "000000" else "111111"
+    for _ in range(5):
+        api.post(f"{RESET}/verify", json={"email": "guesser@example.com", "code": wrong})
+    locked = api.post(f"{RESET}/verify", json={"email": "guesser@example.com", "code": code})
+    assert locked.status_code == 429
+
+
+def test_reset_is_unavailable_without_identity_configuration(api, mailbox):
+    sign_up(api, "no-firebase", email="no-firebase@example.com")
+    code = data(api.post(f"{RESET}/request", json={"email": "no-firebase@example.com"}))["development_code"]
+    token = data(api.post(f"{RESET}/verify", json={"email": "no-firebase@example.com", "code": code}))["reset_token"]
+    response = api.post(f"{RESET}/complete", json={"reset_token": token, "new_password": "NewPass2026"})
+    assert response.status_code == 503
+    assert error(response)["code"] == "SERVICE_UNAVAILABLE"
 
 
 def test_templates_escape_user_supplied_values():
-    message = email_templates.password_changed(
-        name="<script>alert(1)</script>", app_url="https://spendova.app", changed_at=datetime.now(timezone.utc)
-    )
-    assert "<script>" not in message.html
-    assert "&lt;script&gt;" in message.html
+    content = email_templates.password_changed_email("<script>alert(1)</script>", datetime.now(UTC))
+    _, text, html = email_templates.render(content)
+    assert "<script>alert" not in html
+    assert "&lt;script&gt;" in html
+    assert "Hi <script>alert(1)</script>," in text  # Plain text is never rendered as HTML.

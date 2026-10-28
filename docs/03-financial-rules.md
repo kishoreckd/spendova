@@ -176,6 +176,27 @@ Rules:
 - Store lender-provided EMI separately from calculated EMI and show variance.
 - Monthly commitment calculations include payments due in the selected month, not simply one average payment.
 
+### Implemented (2026-10-28) — `backend/app/core/finance.py`
+
+- **Inputs:** principal, tenure (1–480 months), first EMI date, processing fee, and the annual rate, the EMI, or both.
+- **Rate only:** EMI = `P·r·(1+r)^n / ((1+r)^n − 1)` with `r = annual / 1200`, rounded to paise.
+- **EMI only (shop/“no-cost” offers):** the effective annual rate is solved by bisection and flagged
+  `rate_is_estimated`. Example: ₹50,000 over 12 months at ₹4,600/month is 18.67% p.a.
+- **Schedule:** each row splits the EMI into interest (`balance × r`) and principal; the final EMI
+  settles the remaining balance exactly. If the given EMI and rate cannot repay the principal in the
+  tenure, the request is rejected with a plain reason.
+- **Totals:** `total_payable` = sum of EMIs; `total_interest` = total_payable − principal;
+  `total_cost` = interest + processing fee (what borrowing costs beyond the amount itself);
+  money leaving the account overall = total_payable + fee.
+- **Progress:** EMIs paid = `installments_paid_before` (default: those due before today) plus EMI
+  transactions recorded against the loan's bill. Outstanding principal, remaining interest, next
+  due date, overdue, due this month, and ends this month follow from the schedule.
+- **Overview:** EMI-to-income % = monthly EMI total ÷ average monthly income of the last three full
+  months. The UI labels ≤ 30% comfortable, ≤ 40% stretched, above that high.
+- **Known gap:** paying an EMI posts the full EMI as an expense in “Loans & EMIs”. The ledger does not
+  yet split principal (a liability reduction) from interest (an expense); the split is shown in the
+  loan summary and schedule only.
+
 ## 10. Investments
 
 First-release scope:

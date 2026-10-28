@@ -211,10 +211,10 @@ expense/
 ├── assets/                   source brand assets
 ├── SESSION_HANDOFF/          continuation context
 ├── compose.yaml
-├── PRODUCT_PLAN.md
-├── UI_UX_PLAN.md
-├── DATABASE_SCHEMA.md
-├── FINANCIAL_RULES.md
+├── docs/01-product-plan.md
+├── docs/08-ux-plan.md
+├── docs/04-data-model.md
+├── docs/03-financial-rules.md
 └── other engineering docs
 ```
 
@@ -561,3 +561,41 @@ Implemented: migration `0006`, asset PATCH, category PATCH, budget status by
 category and delete, Plan page create flows (budget, bill, goal contribution),
 category edit, Excel export, shell header page actions, mobile FAB, persistent
 theme, real greeting, and the shared form system listed in CURRENT_STATUS.md.
+
+## 19. 22–28 October 2026: Vaultessa structure, email system, loans and EMIs
+
+The user asked for Spendova to follow the structure of their other project,
+Vaultessa (`C:\Users\CXO\Music\Password`): folder layout, code conventions, and
+email templates. This was delivered in four phases:
+
+1. **Backend structure** — per-feature api/services/schemas, one model per file,
+   `core/` and `constants/`, error codes with per-field `details[].path`, audit
+   log, rate limits, security headers, production config guard, tests through
+   real migrations (several older migrations were made SQLite batch-safe).
+2. **Email parity** — Jinja templates extending a branded layout with dark mode
+   and inline logo, transactional outbox with retries, sealed bodies, preview script.
+3. **Frontend** — `src/api/<feature>`, TanStack Query hooks, `components/common`
+   and `components/layout`, large files split, window events replaced by cache
+   invalidation.
+4. **Docs** — numbered `docs/`, `CLAUDE.md`, `.claude/skills/`.
+
+Mid-way the user added the loans requirement (their words, summarised): track
+products bought on EMI and loans by type and name; given the amount, monthly
+payment, and tenure, automatically calculate the total paid and the interest;
+show what is due and what ends each month; make it graph-friendly. They plan a
+finance agent/chat that uses all of this data to advise whether to buy a product
+or take a loan, how to save and invest, and how much they will have. Spendova
+must compute every number deterministically; the assistant explains. See
+`docs/12-loans-and-finance-assistant.md`.
+
+Loan behaviour decisions: rate or EMI or both (EMI alone → effective rate),
+first EMI defaults to next month, EMIs due before today are assumed paid unless
+entered, each tracked loan owns a monthly bill, paying posts one expense (ledger
+principal/interest split is future work), the loan closes after its last EMI.
+
+Hosting change (28 Oct): the user stated the backend will run **only on Vercel, not
+Railway**. Following Vaultessa: `[tool.vercel]` entrypoint in `pyproject.toml`,
+migrations through a GitHub Actions workflow, and email with the same SMTP path in
+every environment (Mailpit locally, Brevo in production) plus `/health/email`
+checks. Serverless additions: no connection pool and no worker loop when `VERCEL=1`,
+Supabase transaction pooler, and a Vercel Cron endpoint for email retries.

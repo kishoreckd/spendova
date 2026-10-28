@@ -3,7 +3,7 @@ import type { FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { ChartNoAxesCombined, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Field, FormAlert } from "@/components/ui/field";
+import { Field, FormAlert } from "@/components/common/form-field";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/features/auth/auth-context";

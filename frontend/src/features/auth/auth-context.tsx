@@ -18,14 +18,10 @@ import {
   updateProfile as updateFirebaseProfile,
 } from "firebase/auth";
 import type { User } from "firebase/auth";
+import { authApi } from "@/api/auth/api";
+import type { ProfileUpdate, SpendovaUser } from "@/api/auth/types";
 import { auth, trackEvent } from "@/lib/firebase";
-import {
-  confirmVerificationCode,
-  sendVerificationCode,
-  syncGoogleUser,
-  updateCurrentUser,
-  type SpendovaUser,
-} from "@/lib/api";
+import { queryClient } from "@/lib/query-client";
 
 type AuthContextValue = {
   user: User | null;
@@ -42,14 +38,14 @@ type AuthContextValue = {
   sendEmailVerificationCode: () => Promise<string | null>;
   verifyEmailCode: (code: string) => Promise<SpendovaUser>;
   signOut: () => Promise<void>;
-  updateProfile: (values: Partial<SpendovaUser>) => Promise<SpendovaUser>;
+  updateProfile: (values: ProfileUpdate) => Promise<SpendovaUser>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 async function syncUser(user: User) {
   await user.getIdToken();
-  return syncGoogleUser({
+  return authApi.syncSignIn({
     email: user.email,
     name: user.displayName,
     photo_url: user.photoURL,
@@ -62,30 +58,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(
-    () =>
-      onIdTokenChanged(auth, async (firebaseUser) => {
-        setUser(firebaseUser);
-        setError(null);
-        if (!firebaseUser) {
-          setProfile(null);
-          setLoading(false);
-          return;
-        }
-        try {
-          setProfile(await syncUser(firebaseUser));
-        } catch (reason) {
-          setError(
-            reason instanceof Error
-              ? reason.message
-              : "Could not load your Spendova profile",
-          );
-        } finally {
-          setLoading(false);
-        }
-      }),
-    [],
-  );
+  useEffect(() => {
+    let currentUid: string | null = null;
+    return onIdTokenChanged(auth, async (firebaseUser) => {
+      // Never show one person's cached data to the next account on this device.
+      if ((firebaseUser?.uid ?? null) !== currentUid) queryClient.clear();
+      currentUid = firebaseUser?.uid ?? null;
+      setUser(firebaseUser);
+      setError(null);
+      if (!firebaseUser) {
+        setProfile(null);
+        setLoading(false);
+        return;
+      }
+      try {
+        setProfile(await syncUser(firebaseUser));
+      } catch (reason) {
+        setError(
+          reason instanceof Error
+            ? reason.message
+            : "Could not load your Spendova profile",
+        );
+      } finally {
+        setLoading(false);
+      }
+    });
+  }, []);
 
   const signInWithGoogle = useCallback(async () => {
     setError(null);
@@ -130,7 +128,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const nextProfile = await syncUser(result.user);
       setUser(result.user);
       setProfile(nextProfile);
-      const response = await sendVerificationCode();
+      const response = await authApi.sendVerificationCode();
       void trackEvent("signup_completed", { provider: "password" });
       return response.development_code;
     },
@@ -138,12 +136,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const sendEmailVerificationCode = useCallback(async () => {
-    const response = await sendVerificationCode();
+    const response = await authApi.sendVerificationCode();
     return response.development_code;
   }, []);
 
   const verifyEmailCode = useCallback(async (code: string) => {
-    const nextProfile = await confirmVerificationCode(code);
+    const nextProfile = await authApi.confirmVerificationCode(code);
     setProfile(nextProfile);
     void trackEvent("email_verified");
     return nextProfile;
@@ -152,10 +150,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     await firebaseSignOut(auth);
     setProfile(null);
+    queryClient.clear();
   }, []);
 
-  const updateProfile = useCallback(async (values: Partial<SpendovaUser>) => {
-    const updated = await updateCurrentUser(values);
+  const updateProfile = useCallback(async (values: ProfileUpdate) => {
+    const updated = await authApi.updateProfile(values);
     setProfile(updated);
     return updated;
   }, []);

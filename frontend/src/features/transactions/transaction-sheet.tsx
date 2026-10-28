@@ -3,20 +3,12 @@ import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowRight, WalletCards } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { z } from "zod";
 import { cn } from "cn";
-import { DatePicker } from "@/components/date-picker";
-import { TilePicker } from "@/components/tile-picker";
+import { AccountSelect } from "@/components/common/account-select";
+import { DatePicker } from "@/components/common/date-picker";
+import { Field, FormAlert } from "@/components/common/form-field";
+import { TilePicker } from "@/components/common/tile-picker";
 import { Button } from "@/components/ui/button";
-import { Field, FormAlert } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -25,92 +17,37 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  categoryTile,
-  useCategories,
-} from "@/features/categories/use-categories";
+import { useAccounts } from "@/features/accounts/hooks";
+import { categoryTile, useCategories } from "@/features/categories/hooks";
+import { useRecurring } from "@/features/planning/hooks";
 import { useMoney } from "@/hooks/use-money";
-import {
-  createTransaction,
-  listAccounts,
-  listRecurringRules,
-  type AccountItem,
-  type RecurringItem,
-} from "@/lib/api";
-import { currencySymbol, formatMoney, localDateISO } from "@/lib/format";
+import { currencySymbol, formatMoney } from "@/lib/format";
 import {
   applyServerErrors,
   controlProps,
-  money,
+  errorMessage,
   notifySuccess,
 } from "@/lib/forms";
-
-export const TRANSACTIONS_CHANGED = "spendova:transactions";
-
-const kinds = ["expense", "income", "transfer"] as const;
-type Kind = (typeof kinds)[number];
-
-const schema = z
-  .object({
-    kind: z.enum(kinds),
-    amount: money(),
-    categoryId: z.string(),
-    account: z.string(),
-    toAccount: z.string(),
-    merchant: z.string().trim().max(160, "Keep this under 160 characters"),
-    date: z.string().min(1, "Choose a date"),
-    notes: z.string().trim().max(500, "Keep notes under 500 characters"),
-    commitmentId: z.string(),
-  })
-  .superRefine((value, context) => {
-    const issue = (path: string, message: string) =>
-      context.addIssue({ code: "custom", path: [path], message });
-    if (value.kind !== "transfer" && !value.categoryId)
-      issue("categoryId", "Choose a category");
-    if (!value.account)
-      issue(
-        "account",
-        value.kind === "income"
-          ? "Choose the account that received the money"
-          : "Choose an account",
-      );
-    if (value.kind === "transfer") {
-      if (!value.toAccount) issue("toAccount", "Choose where the money went");
-      else if (value.toAccount === value.account)
-        issue("toAccount", "Choose a different account");
-    }
-  });
-type Values = z.input<typeof schema>;
-
-const serverFields = {
-  amount: "amount",
-  category_id: "categoryId",
-  merchant: "merchant",
-  occurred_on: "date",
-  notes: "notes",
-} as const;
-
-const copy: Record<Kind, { account: string; saved: string }> = {
-  expense: { account: "Paid from", saved: "Expense saved" },
-  income: { account: "Deposited to", saved: "Income saved" },
-  transfer: { account: "From account", saved: "Transfer saved" },
-};
-
-function blank(kind: Kind, account = "", date = localDateISO()): Values {
-  return {
-    kind,
-    amount: "",
-    categoryId: "",
-    account,
-    toAccount: "",
-    merchant: "",
-    date,
-    notes: "",
-    commitmentId: "",
-  };
-}
+import { useCreateTransaction } from "./hooks";
+import {
+  blankTransaction,
+  kindCopy,
+  serverFields,
+  transactionSchema,
+  valuesFromCommitment,
+  type Kind,
+  type TransactionValues,
+} from "./transaction-form";
 
 type Props = {
   open: boolean;
@@ -122,42 +59,38 @@ export function TransactionSheet({ open, onOpenChange, onSaved }: Props) {
   const navigate = useNavigate();
   const currency = useMoney();
   const categories = useCategories(open);
-  const [accounts, setAccounts] = useState<AccountItem[] | null>(null);
-  const [commitments, setCommitments] = useState<RecurringItem[]>([]);
+  const accountsQuery = useAccounts(open);
+  const commitmentsQuery = useRecurring(open);
+  const createTransaction = useCreateTransaction();
+  const accounts = accountsQuery.data;
+  const commitments = useMemo(
+    () => commitmentsQuery.data ?? [],
+    [commitmentsQuery.data],
+  );
   const [formError, setFormError] = useState("");
-  const form = useForm<Values>({
-    resolver: zodResolver(schema),
-    defaultValues: blank("expense"),
+  const form = useForm<TransactionValues>({
+    resolver: zodResolver(transactionSchema),
+    defaultValues: blankTransaction("expense"),
     mode: "onTouched",
   });
   const { errors, isSubmitting } = form.formState;
   const kind = useWatch({ control: form.control, name: "kind" });
-  const accountName = useWatch({ control: form.control, name: "account" });
-  const toAccountName = useWatch({ control: form.control, name: "toAccount" });
+  const accountId = useWatch({ control: form.control, name: "account" });
+  const toAccountId = useWatch({ control: form.control, name: "toAccount" });
   const categoryType = kind === "income" ? "income" : "expense";
-  const selectedAccount = accounts?.find((item) => item.id === accountName);
-  const selectedDestination = accounts?.find(
-    (item) => item.id === toAccountName,
-  );
+  const selectedAccount = accounts?.find((item) => item.id === accountId);
+  const selectedDestination = accounts?.find((item) => item.id === toAccountId);
   const transactionCurrency = selectedAccount?.currency ?? currency.currency;
   const amountSymbol = currencySymbol(transactionCurrency, currency.locale);
+  const loadError = accountsQuery.error
+    ? errorMessage(accountsQuery.error, "Could not load accounts")
+    : "";
 
+  // Default to the first account once accounts arrive.
   useEffect(() => {
-    if (!open) return;
-    Promise.all([listAccounts(), listRecurringRules()])
-      .then(([items, rules]) => {
-        setAccounts(items);
-        setCommitments(rules);
-        if (!form.getValues("account") && items[0])
-          form.setValue("account", items[0].id);
-      })
-      .catch((reason) => {
-        setAccounts([]);
-        setFormError(
-          reason instanceof Error ? reason.message : "Could not load accounts",
-        );
-      });
-  }, [open, form]);
+    if (open && accounts?.[0] && !form.getValues("account"))
+      form.setValue("account", accounts[0].id);
+  }, [open, accounts, form]);
 
   const tiles = useMemo(
     () =>
@@ -170,14 +103,13 @@ export function TransactionSheet({ open, onOpenChange, onSaved }: Props) {
   function close() {
     onOpenChange(false);
     setFormError("");
-    form.reset(blank("expense", form.getValues("account")));
+    form.reset(blankTransaction("expense", form.getValues("account")));
   }
 
   function changeKind(next: Kind) {
-    const values = form.getValues();
     form.reset(
       {
-        ...values,
+        ...form.getValues(),
         kind: next,
         categoryId: "",
         toAccount: "",
@@ -188,9 +120,9 @@ export function TransactionSheet({ open, onOpenChange, onSaved }: Props) {
     setFormError("");
   }
 
-  async function save(values: Values, addAnother: boolean) {
+  async function save(values: TransactionValues, addAnother: boolean) {
     setFormError("");
-    const parsed = schema.parse(values);
+    const parsed = transactionSchema.parse(values);
     const category = categories.items.find(
       (item) => item.id === parsed.categoryId,
     );
@@ -215,33 +147,36 @@ export function TransactionSheet({ open, onOpenChange, onSaved }: Props) {
       return;
     }
     try {
-      await createTransaction({
-        kind: parsed.kind,
-        amount: parsed.amount,
-        source:
-          linkedCommitment?.source ??
-          (parsed.kind === "income"
-            ? counterparty
-            : (selectedAccount?.name ?? "")),
-        destination:
-          linkedCommitment?.destination ??
-          (parsed.kind === "income"
-            ? (selectedAccount?.name ?? "")
-            : counterparty),
-        source_account_id:
-          parsed.kind === "income" ? undefined : selectedAccount?.id,
-        destination_account_id:
-          parsed.kind === "income"
-            ? selectedAccount?.id
-            : parsed.kind === "transfer"
-              ? selectedDestination?.id
-              : undefined,
-        merchant: parsed.merchant || undefined,
-        occurred_on: parsed.date,
-        currency: transactionCurrency,
-        category_id: parsed.kind === "transfer" ? undefined : parsed.categoryId,
-        notes: parsed.notes || undefined,
-        recurring_rule_id: parsed.commitmentId || undefined,
+      await createTransaction.mutateAsync({
+        body: {
+          kind: parsed.kind,
+          amount: parsed.amount,
+          source:
+            linkedCommitment?.source ??
+            (parsed.kind === "income"
+              ? counterparty
+              : (selectedAccount?.name ?? "")),
+          destination:
+            linkedCommitment?.destination ??
+            (parsed.kind === "income"
+              ? (selectedAccount?.name ?? "")
+              : counterparty),
+          source_account_id:
+            parsed.kind === "income" ? undefined : selectedAccount?.id,
+          destination_account_id:
+            parsed.kind === "income"
+              ? selectedAccount?.id
+              : parsed.kind === "transfer"
+                ? selectedDestination?.id
+                : undefined,
+          merchant: parsed.merchant || undefined,
+          occurred_on: parsed.date,
+          currency: transactionCurrency,
+          category_id:
+            parsed.kind === "transfer" ? undefined : parsed.categoryId,
+          notes: parsed.notes || undefined,
+          recurring_rule_id: parsed.commitmentId || undefined,
+        },
       });
     } catch (reason) {
       setFormError(
@@ -255,20 +190,19 @@ export function TransactionSheet({ open, onOpenChange, onSaved }: Props) {
       return;
     }
     notifySuccess(
-      copy[parsed.kind].saved,
+      kindCopy[parsed.kind].saved,
       `${formatMoney(parsed.amount, transactionCurrency, currency.locale)} · ${parsed.merchant || counterparty}`,
     );
-    window.dispatchEvent(new CustomEvent(TRANSACTIONS_CHANGED));
     onSaved?.();
     if (addAnother) {
-      form.reset(blank(parsed.kind, parsed.account, parsed.date));
+      form.reset(blankTransaction(parsed.kind, parsed.account, parsed.date));
       form.setFocus("amount");
     } else {
       close();
     }
   }
 
-  const noAccounts = accounts !== null && accounts.length === 0;
+  const noAccounts = accounts !== undefined && accounts.length === 0;
 
   return (
     <Dialog
@@ -278,7 +212,7 @@ export function TransactionSheet({ open, onOpenChange, onSaved }: Props) {
       <DialogContent className="gap-0 overflow-y-auto overscroll-contain p-0 sm:max-w-2xl max-sm:top-0 max-sm:left-0 max-sm:h-dvh max-sm:max-h-dvh max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none">
         <DialogHeader className="px-4 pt-4 pb-2 sm:px-6">
           <DialogTitle className="text-lg">Add transaction</DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="sr-only">
             Record an expense, income, or transfer.
           </DialogDescription>
         </DialogHeader>
@@ -302,9 +236,8 @@ export function TransactionSheet({ open, onOpenChange, onSaved }: Props) {
             {commitments.length > 0 && (
               <Field
                 id="linked-commitment"
-                label="Linked commitment"
+                label="Linked bill or plan"
                 optional
-                hint="Select a bill, premium, LIC plan, investment, or expected income. Saving will advance its next due date."
               >
                 <Controller
                   control={form.control}
@@ -313,42 +246,20 @@ export function TransactionSheet({ open, onOpenChange, onSaved }: Props) {
                     <Select
                       value={field.value || "none"}
                       onValueChange={(value) => {
-                        if (!value || value === "none") {
-                          field.onChange("");
-                          return;
-                        }
                         const rule = commitments.find(
                           (item) => item.id === value,
                         );
-                        if (!rule) return;
-                        form.reset({
-                          ...form.getValues(),
-                          kind: rule.kind,
-                          amount: rule.amount,
-                          categoryId: rule.category_id ?? "",
-                          account:
-                            rule.kind === "income"
-                              ? (rule.destination_account_id ??
-                                accounts?.find(
-                                  (item) => item.name === rule.destination,
-                                )?.id ??
-                                "")
-                              : (rule.source_account_id ??
-                                accounts?.find(
-                                  (item) => item.name === rule.source,
-                                )?.id ??
-                                ""),
-                          toAccount:
-                            rule.kind === "transfer"
-                              ? (rule.destination_account_id ??
-                                accounts?.find(
-                                  (item) => item.name === rule.destination,
-                                )?.id ??
-                                "")
-                              : "",
-                          merchant: rule.name,
-                          commitmentId: rule.id,
-                        });
+                        if (!rule) {
+                          field.onChange("");
+                          return;
+                        }
+                        form.reset(
+                          valuesFromCommitment(
+                            form.getValues(),
+                            rule,
+                            accounts,
+                          ),
+                        );
                         setFormError("");
                       }}
                     >
@@ -357,7 +268,10 @@ export function TransactionSheet({ open, onOpenChange, onSaved }: Props) {
                         id="linked-commitment"
                         className="w-full"
                       >
-                        <SelectValue placeholder="Not linked" />
+                        <SelectValue>
+                          {commitments.find((item) => item.id === field.value)
+                            ?.name ?? "Not linked"}
+                        </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none">Not linked</SelectItem>
@@ -470,7 +384,7 @@ export function TransactionSheet({ open, onOpenChange, onSaved }: Props) {
               >
                 <AccountSelect
                   id="account"
-                  label={copy[kind].account}
+                  label={kindCopy[kind].account}
                   name="account"
                   accounts={accounts}
                   control={form.control}
@@ -545,7 +459,7 @@ export function TransactionSheet({ open, onOpenChange, onSaved }: Props) {
               />
             </Field>
 
-            <FormAlert>{formError}</FormAlert>
+            <FormAlert>{formError || loadError}</FormAlert>
           </div>
 
           <DialogFooter className="sticky bottom-0 mt-auto flex-col-reverse gap-2 border-t bg-popover/95 px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur sm:flex-row sm:px-6">
@@ -570,57 +484,5 @@ export function TransactionSheet({ open, onOpenChange, onSaved }: Props) {
         </form>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function AccountSelect({
-  id,
-  label,
-  name,
-  accounts,
-  control,
-  error,
-}: {
-  id: string;
-  label: string;
-  name: "account" | "toAccount";
-  accounts: AccountItem[] | null;
-  control: ReturnType<typeof useForm<Values>>["control"];
-  error?: string;
-}) {
-  return (
-    <Field id={id} label={label} error={error}>
-      <Controller
-        control={control}
-        name={name}
-        render={({ field }) => (
-          <Select
-            value={field.value || null}
-            onValueChange={(value) => {
-              field.onChange(value ?? "");
-              field.onBlur();
-            }}
-            disabled={accounts === null}
-          >
-            <SelectTrigger
-              ref={field.ref}
-              {...controlProps(id, error)}
-              className="w-full"
-            >
-              <SelectValue
-                placeholder={accounts === null ? "Loading…" : "Choose account"}
-              />
-            </SelectTrigger>
-            <SelectContent>
-              {accounts?.map((item) => (
-                <SelectItem key={item.id} value={item.id}>
-                  {item.name} · {item.currency}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-      />
-    </Field>
   );
 }

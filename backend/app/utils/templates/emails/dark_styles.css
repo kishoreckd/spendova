@@ -1,0 +1,24 @@
+{% macro rules(scope='') %}
+{{ scope }}.s-bg { background-color: {{ dark.background }} !important; }
+{{ scope }}.s-card { background-color: {{ dark.card }} !important; }
+{{ scope }}.s-soft { background-color: {{ dark.soft }} !important; }
+{{ scope }}.s-ink { color: {{ dark.ink }} !important; }
+{{ scope }}.s-muted { color: {{ dark.muted }} !important; }
+{{ scope }}.s-accent { color: {{ dark.accent }} !important; }
+{{ scope }}.s-alert { color: #FBBF24 !important; }
+{{ scope }}.s-border { border-color: {{ dark.border }} !important; }
+{{ scope }}.s-button { background-color: {{ theme.primary }} !important; color: {{ theme.button_text }} !important; }
+{{ scope }}.s-image { filter: none !important; }
+{% endmacro %}
+{% if force %}
+:root { color-scheme: dark; }
+{{ rules() }}
+{% else %}
+:root { color-scheme: light dark; supported-color-schemes: light dark; }
+@media (prefers-color-scheme: dark) {
+{{ rules() }}
+}
+/* Outlook clients that expose their dark-mode attribute. */
+{{ rules('[data-ogsc] ') }}
+{{ rules('[data-ogsb] ') }}
+{% endif %}

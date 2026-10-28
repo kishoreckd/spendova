@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Field, FormAlert } from "@/components/ui/field";
+import { Field, FormAlert } from "@/components/common/form-field";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -135,7 +135,7 @@ function validateProfile(values: {
   return errors;
 }
 
-export function ProfilePage() {
+export default function ProfilePage() {
   const { profile, updateProfile } = useAuth();
   const navigate = useNavigate();
   const [name, setName] = useState(profile?.display_name ?? "");

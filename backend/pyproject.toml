@@ -1,0 +1,42 @@
+[project]
+name = "spendova-api"
+version = "0.8.0"
+requires-python = ">=3.12"
+# Vercel installs from here when pyproject.toml exists (it ignores requirements.txt).
+# Keep in sync with requirements.txt, which CI and the local Dockerfile install.
+dependencies = [
+  "fastapi==0.115.12",
+  "uvicorn[standard]==0.34.2",
+  "sqlalchemy==2.0.40",
+  "pydantic-settings==2.9.1",
+  "psycopg[binary]==3.2.6",
+  "alembic==1.15.2",
+  "google-auth==2.40.1",
+  "firebase-admin==7.7.0",
+  "requests==2.34.2",
+  "cryptography==50.0.2",
+  "jinja2==3.1.6",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+extend-exclude = ["app/email_previews"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S"]
+ignore = ["B008"] # FastAPI's Depends()/Query() defaults are idiomatic
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "S105", "S106"]
+"migrations/*" = ["E501", "S608"]
+"app/services/email_templates.py" = ["E501"]
+"scripts/*" = ["T201"]
+
+[tool.vercel]
+# The FastAPI app Vercel serves as a serverless function.
+entrypoint = "app.main:app"

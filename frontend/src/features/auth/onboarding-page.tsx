@@ -16,11 +16,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Field, FormAlert } from "@/components/ui/field";
+import { Field, FormAlert } from "@/components/common/form-field";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { useAuth } from "@/features/auth/auth-context";
-import { createAccountRecord, createRecurringIncome } from "@/lib/api";
+import { accountsApi } from "@/api/accounts/api";
+import { recurringApi } from "@/api/recurring/api";
 import { trackEvent } from "@/lib/firebase";
 import { localDateISO } from "@/lib/format";
 import { controlProps, errorMessage, notifySuccess } from "@/lib/forms";
@@ -123,7 +124,7 @@ export default function OnboardingPage() {
     try {
       const cleanAccountName = accountName.trim();
       if (createSetup && cleanAccountName) {
-        await createAccountRecord({
+        const account = await accountsApi.create({
           name: cleanAccountName,
           account_type: "bank",
           currency,
@@ -133,12 +134,19 @@ export default function OnboardingPage() {
         if (Number(monthlyIncome) > 0) {
           const nextMonth = new Date();
           nextMonth.setMonth(nextMonth.getMonth() + 1, 1);
-          await createRecurringIncome({
+          await recurringApi.create({
+            kind: "income",
             name: "Monthly income",
             amount: monthlyIncome,
             currency,
+            frequency: "monthly",
+            interval: 1,
             next_due_on: localDateISO(nextMonth),
-            destination: cleanAccountName,
+            source: "Employer",
+            destination: account.name,
+            destination_account_id: account.id,
+            category_id: null,
+            plan_type: "income",
           });
         }
       }

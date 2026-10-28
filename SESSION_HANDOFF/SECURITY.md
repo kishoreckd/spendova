@@ -21,14 +21,14 @@
 
 A temporary Supabase password appeared in an earlier chat. Rotate it before
 production and before treating the repository as secure. After rotation, verify
-that `alembic current` returns the repository head (`20261020_0006` as of
-21 October 2026).
+that `alembic current` returns the repository head (`20261028_0014` as of
+28 October 2026).
 
-All backend settings default to development values. A production deployment
-must set `ENVIRONMENT=production`, `AUTH_REQUIRED=true`, a long random
-`OTP_SECRET`, and `EMAIL_DELIVERY_MODE=smtp` with SMTP credentials; otherwise any
-caller can act as any user through `X-User-Id`, and verification codes are
-printed to logs.
+Backend settings default to development values, but with
+`ENVIRONMENT=production` the API now refuses to start unless `AUTH_REQUIRED=true`,
+`FIREBASE_PROJECT_ID` is set, `OTP_SECRET` and `DATA_ENCRYPTION_KEY` are 32+
+random characters (not the defaults), and `EMAIL_DELIVERY_MODE=smtp`. Changing
+`DATA_ENCRYPTION_KEY` makes unsent queued emails unreadable.
 
 ## Authentication model
 

@@ -48,6 +48,9 @@
   --border: oklch(1 0 0/10%);
   --input: oklch(1 0 0/14%);
   --ring: oklch(0.7 0.13 185);
+  /* Dark-surface steps of the same hues, validated for CVD separation and contrast. */
+  --chart-1: oklch(0.62 0.13 185);
+  --chart-3: oklch(0.66 0.15 60);
 }
 @theme inline {
   --font-sans: "Geist Variable", sans-serif;

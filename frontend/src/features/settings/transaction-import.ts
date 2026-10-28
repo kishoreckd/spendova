@@ -1,10 +1,9 @@
 import type { Row, Sheet } from "write-excel-file/browser";
 import type { Row as ExcelRow } from "read-excel-file";
-import {
-  createTransaction,
-  listCategories,
-  type NewTransaction,
-} from "@/lib/api";
+import { categoriesApi } from "@/api/categories/api";
+import { transactionsApi } from "@/api/transactions/api";
+import type { TransactionCreate as NewTransaction } from "@/api/transactions/types";
+import { invalidateLedger } from "@/lib/query-client";
 import { localDateISO } from "@/lib/format";
 
 const columns = [
@@ -69,7 +68,7 @@ export async function importTransactionTemplate(
 ): Promise<ImportResult> {
   const [{ default: readXlsxFile }, categories] = await Promise.all([
     import("read-excel-file"),
-    listCategories(),
+    categoriesApi.list(),
   ]);
   const rows = await readXlsxFile(file);
   const actualHeaders = rows[0]?.map(cellText) ?? [];
@@ -158,8 +157,9 @@ export async function importTransactionTemplate(
       .slice(0, 24)
       .map((byte) => byte.toString(16).padStart(2, "0"))
       .join("")}`;
-    await createTransaction(entry.payload, key);
+    await transactionsApi.create(entry.payload, key);
     imported += 1;
   }
+  void invalidateLedger();
   return { imported, rejected: [] };
 }

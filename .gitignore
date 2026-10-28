@@ -12,3 +12,6 @@ backend/*.db
 backend/.venv/
 **/__pycache__/
 .pytest_cache/
+
+/.claude
+CLAUDE.md

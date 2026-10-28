@@ -1,6 +1,6 @@
 # Product Decisions
 
-This file records agreed product choices. Open questions remain in `PRODUCT_PLAN.md`.
+This file records agreed product choices. Open questions remain in `01-product-plan.md`.
 
 ## Locale and currency
 
@@ -42,11 +42,16 @@ This file records agreed product choices. Open questions remain in `PRODUCT_PLAN
 - Credit-card purchases are expenses; credit-card bill payments are transfers and are not counted twice.
 - Loan disbursement creates a liability/account movement, not income.
 - EMI payments split principal, interest, and fees when details are available.
+  *Current implementation (2026-10-28):* the split is calculated and shown per EMI, but the payment
+  is posted as one expense; the ledger split is on the roadmap.
+- Products bought on EMI and loans share one model with a type (product EMI, card EMI, personal,
+  vehicle, home, education, gold, business, other). Users may enter the rate, the EMI, or both;
+  with the EMI alone the effective rate is calculated.
 - Investment contributions are transfers into an investment account. Fees are expenses and realized income is recorded separately.
 
 ## Documentation structure
 
-- Product strategy and scope live in `PRODUCT_PLAN.md`.
-- Screens and interaction design live in `UI_UX_PLAN.md`.
+- Product strategy and scope live in `01-product-plan.md`.
+- Screens and interaction design live in `08-ux-plan.md`.
 - Confirmed choices live in this file.
 - Database schema, API contracts, and the implementation backlog will receive separate documents as they are designed.

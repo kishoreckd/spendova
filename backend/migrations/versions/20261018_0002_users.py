@@ -3,10 +3,11 @@
 Revision ID: 20261018_0002
 Revises: 20261018_0001
 """
+
 from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 revision: str = "20261018_0002"
 down_revision: str | None = "20261018_0001"

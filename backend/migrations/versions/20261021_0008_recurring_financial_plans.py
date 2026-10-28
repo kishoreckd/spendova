@@ -3,10 +3,11 @@
 Revision ID: 20261021_0008
 Revises: 20261021_0007
 """
+
 from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 revision: str = "20261021_0008"
 down_revision: str | None = "20261021_0007"
@@ -19,8 +20,12 @@ def upgrade() -> None:
     op.add_column("recurring_rules", sa.Column("cost_amount", sa.Numeric(19, 4)))
     op.add_column("recurring_rules", sa.Column("annual_return_rate", sa.Numeric(7, 4)))
     op.add_column("recurring_rules", sa.Column("tenure_months", sa.Integer()))
-    op.execute("UPDATE recurring_rules SET plan_type = CASE WHEN kind = 'income' THEN 'income' WHEN kind = 'transfer' THEN 'investment' ELSE 'bill' END")
-    op.alter_column("recurring_rules", "plan_type", server_default=None)
+    op.execute(
+        "UPDATE recurring_rules SET plan_type = CASE WHEN kind = 'income' THEN 'income' WHEN kind = 'transfer' THEN 'investment' ELSE 'bill' END"
+    )
+    # Batch mode lets SQLite (tests, local dev) apply the same change PostgreSQL runs directly.
+    with op.batch_alter_table("recurring_rules") as batch:
+        batch.alter_column("plan_type", server_default=None)
 
 
 def downgrade() -> None:

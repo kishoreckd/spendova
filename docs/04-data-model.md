@@ -1,5 +1,29 @@
 # Database Schema
 
+> Sections 1–18 describe the **target** model. What exists today is listed first.
+
+## 0. Implemented schema (migration head `20261028_0014`)
+
+One SQLAlchemy model per file in `backend/app/db/models/`; migrations in `backend/migrations/versions/`.
+
+| Table | Purpose | Migration |
+|---|---|---|
+| `users` | Profile keyed by Firebase uid; currency, locale, time zone, onboarding, email verified | 0002, 0004 |
+| `email_verification_codes`, `password_reset_codes` | Hashed one-time codes with attempt counts and expiry | 0004, 0007 |
+| `accounts` | Bank, card, cash, investment, loan, FD, RD; opening balance and deposit terms | 0001, 0010 |
+| `categories` | Default and custom, expense/income, icon, colour, monthly budget | 0001, 0005 |
+| `transactions`, `ledger_entries` | Balanced postings; idempotency key; optional recurring rule link; account ids | 0001, 0009, 0011 |
+| `recurring_rules` | Bills, expected income, investment plans; plan type, next due | 0003, 0008 |
+| `budgets`, `budget_lines` | Monthly limits by category | 0003 |
+| `goals`, `goal_contributions` | Savings goals and money added | 0003 |
+| `assets` | Owned items, expected life or target cost per day | 0001, 0006 |
+| `audit_logs` | Who changed what, with non-sensitive metadata (column `metadata`) | 0012 |
+| `email_outbox` | Queued emails, sealed bodies, attempts, next retry, outcome | 0013 |
+| `loans` | Loan/EMI terms, type, lender, paying account, linked asset and bill, status | 0014 |
+
+Every user-owned table has `user_id` with a foreign key to `users`. SQLite enforces foreign keys
+(tests and local), matching PostgreSQL.
+
 ## 1. Design goals
 
 - PostgreSQL is the source of truth for financial data.

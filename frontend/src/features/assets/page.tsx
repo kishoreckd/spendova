@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   BadgeCheck,
   CircleDollarSign,
@@ -13,12 +13,12 @@ import {
   TrendingDown,
 } from "lucide-react";
 import { cn } from "cn";
-import { PageActions } from "@/app/page-actions";
-import { ConfirmDialog } from "@/components/confirm-dialog";
+import { PageActions } from "@/components/layout/page-actions";
+import { ConfirmDialog } from "@/components/common/confirm-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { FormAlert } from "@/components/ui/field";
+import { FormAlert } from "@/components/common/form-field";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,37 +27,26 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Progress } from "@/components/ui/progress";
 import { useMoney } from "@/hooks/use-money";
-import { archiveAsset, listAssets, type AssetItem } from "@/lib/api";
+import type { AssetItem } from "@/api/assets/types";
 import { errorMessage, notifySuccess } from "@/lib/forms";
 import { AssetFormDialog } from "./asset-form-dialog";
 import { describeAge, describeLife } from "./asset-goal";
 import { assetTypeTile } from "./asset-types";
+import { useArchiveAsset, useAssets } from "./hooks";
 
 export default function AssetInventoryPage() {
   const currency = useMoney();
-  const [assets, setAssets] = useState<AssetItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState("");
+  const assetsQuery = useAssets();
+  const archiveAsset = useArchiveAsset();
   const [editing, setEditing] = useState<AssetItem | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [removing, setRemoving] = useState<AssetItem | null>(null);
-
-  const load = useCallback(
-    () =>
-      listAssets()
-        .then((records) => {
-          setAssets(records);
-          setLoadError("");
-        })
-        .catch((reason) =>
-          setLoadError(errorMessage(reason, "Could not load your assets")),
-        )
-        .finally(() => setLoading(false)),
-    [],
-  );
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const assets = useMemo(() => assetsQuery.data ?? [], [assetsQuery.data]);
+  const loading = assetsQuery.isPending;
+  const loadError = assetsQuery.error
+    ? errorMessage(assetsQuery.error, "Could not load your assets")
+    : "";
+  const load = assetsQuery.refetch;
 
   const totals = useMemo(
     () => ({
@@ -79,11 +68,6 @@ export default function AssetInventoryPage() {
   }
 
   function onSaved(saved: AssetItem, created: boolean) {
-    setAssets((current) =>
-      created
-        ? [saved, ...current]
-        : current.map((item) => (item.id === saved.id ? saved : item)),
-    );
     notifySuccess(
       created ? `${saved.name} added` : `${saved.name} updated`,
       `Costs you ${currency.format(saved.cost_per_day)} per day so far.`,
@@ -191,10 +175,7 @@ export default function AssetInventoryPage() {
         confirmLabel="Remove asset"
         onConfirm={async () => {
           if (!removing) return;
-          await archiveAsset(removing.id);
-          setAssets((current) =>
-            current.filter((item) => item.id !== removing.id),
-          );
+          await archiveAsset.mutateAsync(removing.id);
           notifySuccess(`${removing.name} removed`);
         }}
       />

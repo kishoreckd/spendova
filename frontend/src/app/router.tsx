@@ -1,8 +1,8 @@
 /* oxlint-disable react/only-export-components -- route configuration owns lazy route references */
 import { lazy, Suspense } from "react";
 import { createBrowserRouter, Navigate } from "react-router-dom";
-import { AppShell } from "@/app/app-shell";
-import { LoadingScreen } from "@/components/loading-screen";
+import { AppShell } from "@/components/layout/app-shell";
+import { LoadingScreen } from "@/components/common/loading-screen";
 import { useAuth } from "@/features/auth/auth-context";
 const Dashboard = lazy(() => import("@/features/dashboard/page"));
 const Demo = lazy(() => import("@/features/dashboard/demo-page"));
@@ -18,6 +18,7 @@ const Planning = lazy(() => import("@/features/planning/page"));
 const More = lazy(() => import("@/features/more/page"));
 const Accounts = lazy(() => import("@/features/accounts/page"));
 const Assets = lazy(() => import("@/features/assets/page"));
+const Loans = lazy(() => import("@/features/loans/page"));
 const Categories = lazy(() => import("@/features/categories/page"));
 const Settings = lazy(() => import("@/features/settings/page"));
 const Profile = lazy(() => import("@/features/profile/page"));
@@ -108,6 +109,7 @@ export const router = createBrowserRouter([
       { path: "more", element: suspense(<More />) },
       { path: "accounts", element: suspense(<Accounts />) },
       { path: "assets", element: suspense(<Assets />) },
+      { path: "loans", element: suspense(<Loans />) },
       { path: "categories", element: suspense(<Categories />) },
       { path: "settings", element: suspense(<Settings />) },
       { path: "profile", element: suspense(<Profile />) },

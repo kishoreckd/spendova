@@ -4,9 +4,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Archive, Check, Plus, Tags } from "lucide-react";
 import { z } from "zod";
 import { cn } from "cn";
-import { PageActions } from "@/app/page-actions";
-import { ConfirmDialog } from "@/components/confirm-dialog";
-import { MoneyInput } from "@/components/money-input";
+import { PageActions } from "@/components/layout/page-actions";
+import { ConfirmDialog } from "@/components/common/confirm-dialog";
+import { MoneyInput } from "@/components/common/money-input";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -16,16 +16,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Field, FormAlert } from "@/components/ui/field";
+import { Field, FormAlert } from "@/components/common/form-field";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useMoney } from "@/hooks/use-money";
-import {
-  archiveCategory,
-  createCategory,
-  updateCategory,
-  type CategoryItem,
-} from "@/lib/api";
+import type { CategoryItem, CategoryType } from "@/api/categories/types";
 import {
   applyServerErrors,
   controlProps,
@@ -40,9 +35,7 @@ import {
   nextCategoryColor,
   suggestCategoryIcon,
 } from "./category-icons";
-import { CATEGORIES_CHANGED, useCategories } from "./use-categories";
-
-type CategoryType = "expense" | "income";
+import { useArchiveCategory, useCategories, useSaveCategory } from "./hooks";
 
 const schema = z.object({
   name: requiredText("Give the category a name", 80),
@@ -64,6 +57,7 @@ const serverFields = {
 export default function CategoriesPage() {
   const currency = useMoney();
   const categories = useCategories();
+  const archiveCategory = useArchiveCategory();
   const [tab, setTab] = useState<CategoryType>("expense");
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<CategoryItem | null>(null);
@@ -177,10 +171,7 @@ export default function CategoriesPage() {
         category={editing}
         defaultType={tab}
         existingCount={categories.items.length}
-        onSaved={(saved) => {
-          setTab(saved.category_type);
-          window.dispatchEvent(new CustomEvent(CATEGORIES_CHANGED));
-        }}
+        onSaved={(saved) => setTab(saved.category_type)}
         onArchive={(category) => {
           setFormOpen(false);
           setArchiving(category);
@@ -194,8 +185,7 @@ export default function CategoriesPage() {
         confirmLabel="Archive category"
         onConfirm={async () => {
           if (!archiving) return;
-          await archiveCategory(archiving.id);
-          window.dispatchEvent(new CustomEvent(CATEGORIES_CHANGED));
+          await archiveCategory.mutateAsync(archiving.id);
           notifySuccess(`${archiving.name} archived`);
         }}
       />
@@ -222,6 +212,7 @@ function CategoryFormDialog({
   onArchive: (category: CategoryItem) => void;
 }) {
   const currency = useMoney();
+  const saveCategory = useSaveCategory();
   const [formError, setFormError] = useState("");
   const [iconChosen, setIconChosen] = useState(false);
   const form = useForm<Values>({
@@ -289,9 +280,11 @@ function CategoryFormDialog({
         parsed.type === "expense" && parsed.budget ? parsed.budget : null,
     };
     try {
-      const saved = category
-        ? await updateCategory(category.id, details)
-        : await createCategory({ ...details, category_type: parsed.type });
+      const saved = await saveCategory.mutateAsync(
+        category
+          ? { id: category.id, body: details }
+          : { id: null, body: { ...details, category_type: parsed.type } },
+      );
       notifySuccess(category ? `${saved.name} updated` : `${saved.name} added`);
       onSaved(saved);
       changeOpen(false);

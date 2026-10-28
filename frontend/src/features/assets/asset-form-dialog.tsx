@@ -3,9 +3,9 @@ import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CalendarCheck2 } from "lucide-react";
 import { z } from "zod";
-import { DatePicker } from "@/components/date-picker";
-import { MoneyInput } from "@/components/money-input";
-import { TilePicker } from "@/components/tile-picker";
+import { DatePicker } from "@/components/common/date-picker";
+import { MoneyInput } from "@/components/common/money-input";
+import { TilePicker } from "@/components/common/tile-picker";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -15,17 +15,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Field, FormAlert } from "@/components/ui/field";
+import { Field, FormAlert } from "@/components/common/form-field";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useMoney } from "@/hooks/use-money";
-import {
-  createAsset,
-  updateAsset,
-  type AssetInput,
-  type AssetItem,
-} from "@/lib/api";
+import type { AssetInput, AssetItem } from "@/api/assets/types";
 import { localDateISO } from "@/lib/format";
 import {
   applyServerErrors,
@@ -37,6 +32,7 @@ import {
 } from "@/lib/forms";
 import { describeLife, previewGoal, type GoalMode } from "./asset-goal";
 import { assetTypeTiles } from "./asset-types";
+import { useSaveAsset } from "./hooks";
 
 const WHOLE_NUMBER = /^\d*$/;
 
@@ -122,6 +118,7 @@ export function AssetFormDialog({
   onSaved,
 }: Props) {
   const currency = useMoney();
+  const saveAsset = useSaveAsset();
   const [formError, setFormError] = useState("");
   const [extraTypes, setExtraTypes] = useState<string[]>([]);
   const form = useForm<Values>({
@@ -173,9 +170,10 @@ export function AssetFormDialog({
         parsed.goalMode === "daily" ? parsed.dailyTarget : null,
     };
     try {
-      const saved = asset
-        ? await updateAsset(asset.id, payload)
-        : await createAsset(payload);
+      const saved = await saveAsset.mutateAsync({
+        id: asset?.id ?? null,
+        body: payload,
+      });
       onSaved(saved, !asset);
       onOpenChange(false);
     } catch (reason) {

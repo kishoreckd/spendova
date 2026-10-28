@@ -18,7 +18,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field } from "@/components/ui/field";
+import { Field } from "@/components/common/form-field";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -87,7 +87,8 @@ export default function SettingsPage() {
     }
     setBusy("excel");
     try {
-      const { downloadExcelExport } = await import("@/lib/excel-export");
+      const { downloadExcelExport } =
+        await import("@/features/settings/excel-export");
       const today = localDateISO();
       const ranges = {
         "1-month": {
@@ -133,7 +134,7 @@ export default function SettingsPage() {
     setBusy("template");
     try {
       const { downloadTransactionTemplate } =
-        await import("@/lib/transaction-import");
+        await import("@/features/settings/transaction-import");
       await downloadTransactionTemplate(profile.base_currency);
       notifySuccess("Import template downloaded");
     } catch (reason) {
@@ -147,7 +148,7 @@ export default function SettingsPage() {
     setBusy("import");
     try {
       const { importTransactionTemplate } =
-        await import("@/lib/transaction-import");
+        await import("@/features/settings/transaction-import");
       const result = await importTransactionTemplate(file);
       if (result.rejected.length) {
         notifyError(
@@ -245,10 +246,6 @@ export default function SettingsPage() {
             <CalendarRange className="size-5 text-primary" /> Export bank
             statement
           </CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Download your transactions as an Excel statement for a selected
-            period.
-          </p>
         </CardHeader>
         <CardContent className="space-y-5">
           <Tabs
@@ -266,12 +263,7 @@ export default function SettingsPage() {
           </Tabs>
           {statementPeriod === "custom" && (
             <div className="grid gap-4 rounded-xl border bg-muted/25 p-4 sm:grid-cols-2">
-              <Field
-                id="statement-from"
-                label="Start date"
-                optional
-                hint="Leave empty to start from your first transaction"
-              >
+              <Field id="statement-from" label="Start date" optional>
                 <Input
                   id="statement-from"
                   type="date"
@@ -310,17 +302,10 @@ export default function SettingsPage() {
           <CardTitle className="flex items-center gap-2">
             <Upload className="size-5 text-primary" /> Import transactions
           </CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Download the Spendova template, add your transaction rows, then
-            upload the completed Excel file.
-          </p>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <div className="rounded-xl border p-4">
             <p className="font-medium">1. Get the template</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Keep the column names unchanged and remove the example row.
-            </p>
             <Button
               className="mt-4 w-full"
               variant="outline"
@@ -333,9 +318,6 @@ export default function SettingsPage() {
           </div>
           <div className="rounded-xl border p-4">
             <p className="font-medium">2. Upload completed template</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Every row is checked before any transaction is imported.
-            </p>
             <Input
               className="mt-4"
               type="file"

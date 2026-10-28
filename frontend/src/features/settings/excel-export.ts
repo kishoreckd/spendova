@@ -1,10 +1,9 @@
 import type { Cell, Row, Sheet } from "write-excel-file/browser";
-import {
-  listAccounts,
-  listAllTransactions,
-  listCategories,
-  type SpendovaUser,
-} from "@/lib/api";
+import { accountsApi } from "@/api/accounts/api";
+import type { SpendovaUser } from "@/api/auth/types";
+import { categoriesApi } from "@/api/categories/api";
+import { loansApi } from "@/api/loans/api";
+import { transactionsApi } from "@/api/transactions/api";
 import { localDateISO, parseISODate } from "@/lib/format";
 
 const MONEY_FORMAT = "#,##0.00";
@@ -55,13 +54,19 @@ export async function downloadExcelExport(
   profile: SpendovaUser,
   range: StatementRange,
 ) {
-  const [accounts, categories, allTransactions, { default: writeXlsxFile }] =
-    await Promise.all([
-      listAccounts(),
-      listCategories(),
-      listAllTransactions(),
-      import("write-excel-file/browser"),
-    ]);
+  const [
+    accounts,
+    categories,
+    allTransactions,
+    loans,
+    { default: writeXlsxFile },
+  ] = await Promise.all([
+    accountsApi.list(),
+    categoriesApi.list(),
+    transactionsApi.listAll(),
+    loansApi.list(true),
+    import("write-excel-file/browser"),
+  ]);
   const transactions = allTransactions.filter(
     (item) =>
       (!range.from || item.occurred_on >= range.from) &&
@@ -92,6 +97,19 @@ export async function downloadExcelExport(
         [text("Total income"), amount(total("income"))],
         [text("Total spending"), amount(total("expense"))],
         [text("Accounts"), whole(accounts.length)],
+        [
+          text("Active loans"),
+          whole(loans.filter((item) => item.status === "active").length),
+        ],
+        [
+          text("Loan balance outstanding"),
+          amount(
+            loans.reduce(
+              (sum, item) => sum + Number(item.summary.outstanding_principal),
+              0,
+            ),
+          ),
+        ],
       ],
       [22, 34],
     ),
@@ -133,14 +151,59 @@ export async function downloadExcelExport(
     ),
     sheet(
       "Accounts",
-      ["Name", "Type", "Currency", "Opening balance"],
+      ["Name", "Type", "Currency", "Opening balance", "Current balance"],
       accounts.map((item) => [
         text(item.name),
         text(item.account_type),
         text(item.currency),
         amount(item.opening_balance),
+        amount(item.current_balance),
       ]),
-      [26, 14, 10, 18],
+      [26, 14, 10, 18, 18],
+    ),
+    sheet(
+      "Loans & EMIs",
+      [
+        "Name",
+        "Type",
+        "Lender",
+        "Status",
+        "Amount borrowed",
+        "Interest rate %",
+        "Rate estimated",
+        "EMI",
+        "Tenure (months)",
+        "EMIs paid",
+        "EMIs left",
+        "First EMI",
+        "Last EMI",
+        "Total payable",
+        "Total interest",
+        "Processing fee",
+        "Outstanding principal",
+        "Remaining to pay",
+      ],
+      loans.map(({ summary, ...item }) => [
+        text(item.name),
+        text(item.loan_type),
+        text(item.lender),
+        text(item.status),
+        amount(item.principal),
+        amount(summary.annual_rate),
+        text(summary.rate_is_estimated ? "Yes" : "No"),
+        amount(summary.emi),
+        whole(summary.tenure_months),
+        whole(summary.installments_paid),
+        whole(summary.installments_left),
+        day(summary.first_due_on),
+        day(summary.last_due_on),
+        amount(summary.total_payable),
+        amount(summary.total_interest),
+        amount(summary.processing_fee),
+        amount(summary.outstanding_principal),
+        amount(summary.remaining_payable),
+      ]),
+      [24, 14, 18, 9, 16, 14, 13, 13, 14, 10, 10, 13, 13, 15, 15, 14, 19, 17],
     ),
   ];
 

@@ -3,10 +3,11 @@
 Revision ID: 20261021_0010
 Revises: 20261021_0009
 """
+
 from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 revision: str = "20261021_0010"
 down_revision: str | None = "20261021_0009"
@@ -25,5 +26,13 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    for column in ("installment_amount", "tenure_months", "maturity_on", "started_on", "annual_interest_rate", "principal_amount", "institution"):
+    for column in (
+        "installment_amount",
+        "tenure_months",
+        "maturity_on",
+        "started_on",
+        "annual_interest_rate",
+        "principal_amount",
+        "institution",
+    ):
         op.drop_column("accounts", column)

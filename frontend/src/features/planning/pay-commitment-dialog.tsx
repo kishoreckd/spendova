@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { MoneyInput } from "@/components/money-input";
+import type { RecurringItem } from "@/api/recurring/types";
+import { Field, FormAlert } from "@/components/common/form-field";
+import { MoneyInput } from "@/components/common/money-input";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -9,24 +11,21 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Field, FormAlert } from "@/components/ui/field";
 import { useMoney } from "@/hooks/use-money";
-import { payRecurringRule, type RecurringItem } from "@/lib/api";
 import { currencySymbol, localDateISO } from "@/lib/format";
 import { errorMessage, notifySuccess } from "@/lib/forms";
+import { usePayRecurring } from "./hooks";
 
 export function PayCommitmentDialog({
   commitment,
   onOpenChange,
-  onPaid,
 }: {
   commitment: RecurringItem | null;
   onOpenChange: (open: boolean) => void;
-  onPaid: (updated: RecurringItem) => void;
 }) {
   const currency = useMoney();
+  const pay = usePayRecurring();
   const [amount, setAmount] = useState(() => String(commitment?.amount ?? ""));
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   async function confirm() {
@@ -35,12 +34,12 @@ export function PayCommitmentDialog({
       setError("Enter a valid amount greater than zero.");
       return;
     }
-    setSaving(true);
     setError("");
     try {
-      const result = await payRecurringRule(commitment.id, {
+      const result = await pay.mutateAsync({
+        id: commitment.id,
         amount,
-        paid_on: localDateISO(),
+        paidOn: localDateISO(),
       });
       notifySuccess(
         commitment.kind === "income"
@@ -50,13 +49,9 @@ export function PayCommitmentDialog({
             : "Payment recorded",
         `Next due ${currency.date(result.commitment.next_due_on)}`,
       );
-      window.dispatchEvent(new CustomEvent("spendova:transactions"));
-      onPaid(result.commitment);
       onOpenChange(false);
     } catch (reason) {
       setError(errorMessage(reason, "Could not record this payment."));
-    } finally {
-      setSaving(false);
     }
   }
 
@@ -71,9 +66,8 @@ export function PayCommitmentDialog({
                 ? "Record contribution"
                 : "Mark as paid"}
           </DialogTitle>
-          <DialogDescription>
-            Confirm the amount. This creates the transaction and schedules the
-            next date.
+          <DialogDescription className="sr-only">
+            Confirm the amount to record it and schedule the next date.
           </DialogDescription>
         </DialogHeader>
         <Field id="paid-amount" label="Amount paid">
@@ -89,7 +83,7 @@ export function PayCommitmentDialog({
         </Field>
         <FormAlert>{error}</FormAlert>
         <DialogFooter showCloseButton>
-          <Button loading={saving} onClick={() => void confirm()}>
+          <Button loading={pay.isPending} onClick={() => void confirm()}>
             Confirm payment
           </Button>
         </DialogFooter>

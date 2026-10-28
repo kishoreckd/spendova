@@ -13,7 +13,7 @@ import {
   WashingMachine,
   Watch,
 } from "lucide-react";
-import type { Tile } from "@/components/tile-picker";
+import type { Tile } from "@/components/common/tile-picker";
 
 export const presetAssetTypes: Tile[] = [
   { value: "phone", label: "Phone", icon: Smartphone, color: "#0891b2" },

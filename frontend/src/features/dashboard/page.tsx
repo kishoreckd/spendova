@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import type { ShellContext } from "@/app/app-shell";
-import { LoadingScreen } from "@/components/loading-screen";
-import { TRANSACTIONS_CHANGED } from "@/components/transaction-sheet";
-import { FormAlert } from "@/components/ui/field";
+import { FormAlert } from "@/components/common/form-field";
+import { LoadingScreen } from "@/components/common/loading-screen";
+import type { ShellContext } from "@/components/layout/app-shell";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -12,30 +11,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useAccounts } from "@/features/accounts/hooks";
+import { useAuth } from "@/features/auth/auth-context";
+import { DashboardContent } from "@/features/dashboard/dashboard-content";
+import { LoansDueCard } from "@/features/loans/loans-due-card";
+import { useTransactions } from "@/features/transactions/hooks";
 import { formatDate, localDateISO } from "@/lib/format";
 import { errorMessage } from "@/lib/forms";
-import {
-  DashboardContent,
-  type DashboardTransaction,
-} from "@/features/dashboard/dashboard-content";
-import { useAuth } from "@/features/auth/auth-context";
-import {
-  getDashboard,
-  listAccounts,
-  listTransactions,
-  type AccountItem,
-  type DashboardSummary,
-} from "@/lib/api";
+import { useDashboard } from "./hooks";
 
 export default function DashboardPage() {
   const { openTransaction } = useOutletContext<ShellContext>();
   const { profile } = useAuth();
-  const [summary, setSummary] = useState<DashboardSummary | null>(null);
-  const [transactions, setTransactions] = useState<DashboardTransaction[]>([]);
-  const [accounts, setAccounts] = useState<AccountItem[]>([]);
   const [month, setMonth] = useState(() => localDateISO().slice(0, 7));
   const [account, setAccount] = useState("all");
-  const [error, setError] = useState("");
+  const accountId = account === "all" ? undefined : account;
   const period = useMemo(() => {
     const [year, monthNumber] = month.split("-").map(Number);
     const lastDay = new Date(year, monthNumber, 0).getDate();
@@ -47,122 +37,91 @@ export default function DashboardPage() {
     };
   }, [month]);
 
-  useEffect(() => {
-    listAccounts()
-      .then(setAccounts)
-      .catch(() => setAccounts([]));
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-    const load = () =>
-      Promise.all([
-        getDashboard(
-          period.year,
-          period.month,
-          account === "all" ? undefined : account,
-        ),
-        listTransactions(5, {
-          from: period.from,
-          to: period.to,
-          accountId: account === "all" ? undefined : account,
+  const accounts = useAccounts().data ?? [];
+  const summaryQuery = useDashboard(period.year, period.month, accountId);
+  const recentQuery = useTransactions({
+    limit: 5,
+    from: period.from,
+    to: period.to,
+    accountId,
+  });
+  const transactions = useMemo(
+    () =>
+      (recentQuery.data ?? []).map((item) => ({
+        id: item.id,
+        merchant:
+          item.merchant ||
+          (item.kind === "income" ? item.source : item.destination),
+        detail: formatDate(item.occurred_on, profile?.locale || undefined, {
+          day: "numeric",
+          month: "short",
         }),
-      ])
-        .then(([nextSummary, recent]) => {
-          if (!active) return;
-          setSummary(nextSummary);
-          setError("");
-          setTransactions(
-            recent.map((item) => ({
-              id: item.id,
-              merchant:
-                item.merchant ||
-                (item.kind === "income" ? item.source : item.destination),
-              detail: formatDate(
-                item.occurred_on,
-                profile?.locale || undefined,
-                {
-                  day: "numeric",
-                  month: "short",
-                },
-              ),
-              amount:
-                item.kind === "expense"
-                  ? -Number(item.amount)
-                  : Number(item.amount),
-              transfer: item.kind === "transfer",
-            })),
-          );
-        })
-        .catch(
-          (reason) =>
-            active &&
-            setError(errorMessage(reason, "Could not load your overview")),
-        );
-    void load();
-    window.addEventListener(TRANSACTIONS_CHANGED, load);
-    return () => {
-      active = false;
-      window.removeEventListener(TRANSACTIONS_CHANGED, load);
-    };
-  }, [profile?.locale, period, account]);
+        amount:
+          item.kind === "expense" ? -Number(item.amount) : Number(item.amount),
+        transfer: item.kind === "transfer",
+      })),
+    [recentQuery.data, profile?.locale],
+  );
 
-  if (error) return <FormAlert>{error}</FormAlert>;
+  const error = summaryQuery.error ?? recentQuery.error;
+  if (error)
+    return (
+      <FormAlert>
+        {errorMessage(error, "Could not load your overview")}
+      </FormAlert>
+    );
+  const summary = summaryQuery.data;
   if (!summary) return <LoadingScreen />;
+
   const selectedAccount = accounts.find((item) => item.id === account);
   const displayCurrency =
     selectedAccount?.currency ?? profile?.base_currency ?? "INR";
+  const isCurrentMonth = month === localDateISO().slice(0, 7);
   const periodLabel = new Intl.DateTimeFormat(profile?.locale || undefined, {
     month: "long",
     year: "numeric",
   }).format(new Date(period.year, period.month - 1, 1));
+
   return (
     <div className="space-y-5">
-      <div className="flex flex-col gap-3 rounded-xl border bg-card p-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-sm font-semibold">Monthly overview</p>
-          <p className="text-xs text-muted-foreground">
-            Income, spending, and activity for the selected month.
-          </p>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="space-y-1 text-xs font-medium text-muted-foreground">
-            Month
-            <Input
-              type="month"
-              value={month}
-              max={localDateISO().slice(0, 7)}
-              onChange={(event) =>
-                event.target.value && setMonth(event.target.value)
-              }
-              className="min-w-44 text-foreground"
-            />
-          </label>
-          <label className="space-y-1 text-xs font-medium text-muted-foreground">
-            Account
-            <Select
-              value={account}
-              onValueChange={(value) => value && setAccount(value)}
-            >
-              <SelectTrigger className="min-w-52 text-foreground">
-                <SelectValue>
-                  {selectedAccount
-                    ? `${selectedAccount.name} · ${selectedAccount.currency}`
-                    : "All accounts"}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All accounts</SelectItem>
-                {accounts.map((item) => (
-                  <SelectItem key={item.id} value={item.id}>
-                    {item.name} · {item.currency}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </label>
-        </div>
+      <div className="grid gap-3 rounded-xl border bg-card p-3 min-[480px]:grid-cols-2 sm:flex sm:justify-end">
+        <label className="space-y-1 text-xs font-medium text-muted-foreground">
+          Month
+          <Input
+            type="month"
+            value={month}
+            max={localDateISO().slice(0, 7)}
+            onChange={(event) =>
+              event.target.value && setMonth(event.target.value)
+            }
+            className="min-w-44 text-foreground"
+          />
+        </label>
+        <label className="space-y-1 text-xs font-medium text-muted-foreground">
+          Account
+          <Select
+            value={account}
+            onValueChange={(value) => value && setAccount(value)}
+          >
+            <SelectTrigger className="w-full min-w-52 text-foreground">
+              <SelectValue>
+                {selectedAccount
+                  ? `${selectedAccount.name} · ${selectedAccount.currency}`
+                  : "All accounts"}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All accounts</SelectItem>
+              {accounts.map((item) => (
+                <SelectItem key={item.id} value={item.id}>
+                  {item.name} · {item.currency}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </label>
       </div>
+      {isCurrentMonth && !accountId && <LoansDueCard />}
       <DashboardContent
         income={Number(summary.income)}
         spending={Number(summary.spending)}

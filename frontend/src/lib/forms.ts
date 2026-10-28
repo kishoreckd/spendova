@@ -1,7 +1,7 @@
 import { toast } from "sonner";
 import { z } from "zod";
 import type { FieldValues, Path, UseFormSetError } from "react-hook-form";
-import { ApiError } from "@/lib/api";
+import { ApiError } from "@/api/client";
 import { localDateISO } from "@/lib/format";
 
 /**
@@ -73,6 +73,7 @@ export function errorMessage(reason: unknown, fallback: string) {
 
 /**
  * Copies server validation messages onto matching form fields.
+ * `fieldMap` keys are API paths ("lines.0.amount_limit") or just the last segment ("amount_limit").
  * Returns the message to show in a FormAlert when no field claimed it.
  */
 export function applyServerErrors<T extends FieldValues>(
@@ -83,8 +84,8 @@ export function applyServerErrors<T extends FieldValues>(
 ) {
   if (reason instanceof ApiError) {
     let matched = false;
-    for (const [apiField, message] of Object.entries(reason.fieldErrors)) {
-      const field = fieldMap[apiField];
+    for (const [path, message] of Object.entries(reason.fieldErrors)) {
+      const field = fieldMap[path] ?? fieldMap[path.split(".").at(-1) ?? path];
       if (field) {
         setError(field, { type: "server", message }, { shouldFocus: !matched });
         matched = true;

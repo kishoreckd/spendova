@@ -3,14 +3,14 @@ import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { addDays } from "date-fns";
 import { z } from "zod";
-import { DatePicker } from "@/components/date-picker";
-import { MoneyInput } from "@/components/money-input";
+import { DatePicker } from "@/components/common/date-picker";
+import { MoneyInput } from "@/components/common/money-input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FormAlert } from "@/components/ui/field";
+import { Field, FormAlert } from "@/components/common/form-field";
 import { Input } from "@/components/ui/input";
 import { useMoney } from "@/hooks/use-money";
-import { createGoal, type GoalItem } from "@/lib/api";
+import type { GoalItem } from "@/api/goals/types";
 import { localDateISO } from "@/lib/format";
 import {
   applyServerErrors,
@@ -21,6 +21,7 @@ import {
   requiredText,
 } from "@/lib/forms";
 import { purchaseGoal } from "@/lib/planning";
+import { useCreateGoal } from "./hooks";
 
 const schema = z
   .object({
@@ -48,6 +49,7 @@ export function PurchaseGoalCalculator({
   onSaved?: (goal: GoalItem) => void;
 }) {
   const currency = useMoney();
+  const createGoal = useCreateGoal();
   const [formError, setFormError] = useState("");
   const [tomorrow] = useState(() => localDateISO(addDays(new Date(), 1)));
   const form = useForm<Values>({
@@ -74,7 +76,7 @@ export function PurchaseGoalCalculator({
       targetDate: parsed.date,
     });
     try {
-      const goal = await createGoal({
+      const goal = await createGoal.mutateAsync({
         name: parsed.name,
         target_amount: parsed.price,
         saved_amount: parsed.saved || "0",

@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus, X } from "lucide-react";
 import { addMonths, startOfMonth } from "date-fns";
 import { z } from "zod";
-import { MoneyInput } from "@/components/money-input";
+import { MoneyInput } from "@/components/common/money-input";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -14,7 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Field, FormAlert } from "@/components/ui/field";
+import { Field, FormAlert } from "@/components/common/form-field";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -23,9 +23,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useCategories } from "@/features/categories/use-categories";
+import { useCategories } from "@/features/categories/hooks";
 import { useMoney } from "@/hooks/use-money";
-import { ApiError, createBudget, type BudgetItem } from "@/lib/api";
+import { ApiError } from "@/api/client";
 import { localDateISO } from "@/lib/format";
 import {
   applyServerErrors,
@@ -34,6 +34,7 @@ import {
   notifySuccess,
   requiredText,
 } from "@/lib/forms";
+import { useCreateBudget } from "./hooks";
 
 const schema = z
   .object({
@@ -88,13 +89,12 @@ function monthOptions(locale?: string) {
 export function BudgetFormDialog({
   open,
   onOpenChange,
-  onCreated,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onCreated: (budget: BudgetItem) => void;
 }) {
   const currency = useMoney();
+  const createBudget = useCreateBudget();
   const categories = useCategories(open);
   const [formError, setFormError] = useState("");
   const [months] = useState(() => monthOptions(currency.locale));
@@ -133,7 +133,7 @@ export function BudgetFormDialog({
     setFormError("");
     const parsed = schema.parse(input);
     try {
-      const budget = await createBudget({
+      const budget = await createBudget.mutateAsync({
         name: parsed.name,
         month: parsed.month,
         total_limit: parsed.total,
@@ -146,7 +146,6 @@ export function BudgetFormDialog({
         `${budget.name} created`,
         currency.format(budget.total_limit, 0),
       );
-      onCreated(budget);
       changeOpen(false);
     } catch (reason) {
       if (reason instanceof ApiError && reason.status === 409) {
@@ -161,7 +160,20 @@ export function BudgetFormDialog({
         applyServerErrors(
           reason,
           form.setError,
-          { name: "name", total_limit: "total", month: "month" },
+          {
+            name: "name",
+            total_limit: "total",
+            month: "month",
+            ...(Object.fromEntries(
+              input.lines.flatMap((_, index) => [
+                [`lines.${index}.category_id`, `lines.${index}.categoryId`],
+                [`lines.${index}.amount_limit`, `lines.${index}.limit`],
+              ]),
+            ) as Record<
+              string,
+              `lines.${number}.categoryId` | `lines.${number}.limit`
+            >),
+          },
           "Could not create this budget.",
         ),
       );

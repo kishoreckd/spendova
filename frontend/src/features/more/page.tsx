@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { ChevronRight } from "lucide-react";
-import { manageNav } from "@/app/navigation";
+import { manageNav } from "@/components/layout/navigation";
 
 export default function MorePage() {
   const navigate = useNavigate();

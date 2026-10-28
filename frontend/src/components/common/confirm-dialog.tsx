@@ -10,7 +10,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { FormAlert } from "@/components/ui/field";
+import { FormAlert } from "@/components/common/form-field";
 import { errorMessage } from "@/lib/forms";
 
 type ConfirmDialogProps = {
