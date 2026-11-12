@@ -355,7 +355,7 @@ export function CategoryFormDialog({
             </Button>
             <Button type="submit" loading={isSubmitting}>
               {isSubmitting
-                ? "Savingâ€¦"
+                ? "Saving…"
                 : category
                   ? "Save changes"
                   : "Add category"}

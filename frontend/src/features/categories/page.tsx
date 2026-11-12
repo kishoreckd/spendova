@@ -51,10 +51,8 @@ export default function CategoriesPage() {
         onValueChange={(value) => setTab(value as CategoryType)}
       >
         <TabsList className="grid w-full max-w-sm grid-cols-2">
-          <TabsTrigger value="expense">
-            Expenses Â· {counts.expense}
-          </TabsTrigger>
-          <TabsTrigger value="income">Income Â· {counts.income}</TabsTrigger>
+          <TabsTrigger value="expense">Expenses · {counts.expense}</TabsTrigger>
+          <TabsTrigger value="income">Income · {counts.income}</TabsTrigger>
         </TabsList>
       </Tabs>
 

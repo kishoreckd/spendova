@@ -338,7 +338,7 @@ export default function OnboardingPage() {
                 </Button>
                 <Button loading={saving} onClick={next}>
                   {saving
-                    ? "SavingÃ¢â‚¬Â¦"
+                    ? "Saving…"
                     : step === 3
                       ? "Finish setup"
                       : "Continue"}

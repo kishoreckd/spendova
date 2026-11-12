@@ -1,14 +1,7 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import {
-  ArrowLeft,
-  Eye,
-  EyeOff,
-  KeyRound,
-  MailCheck,
-  ShieldCheck,
-} from "lucide-react";
+import { ArrowLeft, KeyRound, MailCheck, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -19,6 +12,7 @@ import {
 } from "@/components/ui/card";
 import { Field, FormAlert } from "@/components/common/form-field";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/common/password-input";
 import { authApi } from "@/api/auth/api";
 import { controlProps, errorMessage, notifySuccess } from "@/lib/forms";
 
@@ -46,7 +40,6 @@ export default function ForgotPasswordPage() {
   const [resetToken, setResetToken] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
   const [developmentCode, setDevelopmentCode] = useState<string | null>(null);
   const [resendIn, setResendIn] = useState(0);
   const [busy, setBusy] = useState<"send" | "verify" | "save" | null>(null);
@@ -298,43 +291,27 @@ export default function ForgotPasswordPage() {
                 label="New password"
                 error={fieldErrors.password}
               >
-                <div className="relative">
-                  <Input
-                    {...controlProps("new-password", fieldErrors.password)}
-                    type={showPassword ? "text" : "password"}
-                    autoComplete="new-password"
-                    value={password}
-                    className="h-11 rounded-xl pr-11 sm:h-11"
-                    onChange={(event) => {
-                      setPassword(event.target.value);
-                      setFieldErrors((current) => ({
-                        ...current,
-                        password: undefined,
-                      }));
-                    }}
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    className="absolute top-1/2 right-1.5 -translate-y-1/2"
-                    aria-label={
-                      showPassword ? "Hide password" : "Show password"
-                    }
-                    onClick={() => setShowPassword((value) => !value)}
-                  >
-                    {showPassword ? <EyeOff /> : <Eye />}
-                  </Button>
-                </div>
+                <PasswordInput
+                  {...controlProps("new-password", fieldErrors.password)}
+                  autoComplete="new-password"
+                  value={password}
+                  className="h-11 rounded-xl sm:h-11"
+                  onChange={(event) => {
+                    setPassword(event.target.value);
+                    setFieldErrors((current) => ({
+                      ...current,
+                      password: undefined,
+                    }));
+                  }}
+                />
               </Field>
               <Field
                 id="confirm-password"
                 label="Confirm password"
                 error={fieldErrors.confirm}
               >
-                <Input
+                <PasswordInput
                   {...controlProps("confirm-password", fieldErrors.confirm)}
-                  type={showPassword ? "text" : "password"}
                   autoComplete="new-password"
                   value={confirm}
                   className="h-11 rounded-xl sm:h-11"

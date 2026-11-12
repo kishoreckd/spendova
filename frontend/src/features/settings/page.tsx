@@ -169,7 +169,7 @@ export default function SettingsPage() {
                 {profile?.display_name ?? "Your profile"}
               </p>
               <p className="truncate text-sm text-muted-foreground">
-                {profile?.email} Â· {profile?.base_currency}
+                {profile?.email} · {profile?.base_currency}
               </p>
             </div>
             <ChevronRight className="size-5 text-muted-foreground" />
@@ -252,7 +252,7 @@ export default function SettingsPage() {
               onClick={() => void exportExcel()}
             >
               <FileSpreadsheet />
-              {busy === "excel" ? "Preparingâ€¦" : "Download Excel statement"}
+              {busy === "excel" ? "Preparing…" : "Download Excel statement"}
             </Button>
           </div>
         </CardContent>
@@ -291,9 +291,7 @@ export default function SettingsPage() {
               }}
             />
             {busy === "import" && (
-              <p className="mt-2 text-sm text-muted-foreground">
-                Validatingâ€¦
-              </p>
+              <p className="mt-2 text-sm text-muted-foreground">Validating…</p>
             )}
           </div>
         </CardContent>

@@ -112,6 +112,18 @@
 .safe-top {
   padding-top: env(safe-area-inset-top);
 }
+/* Keep the toast dismiss button reachable and inside the card on phones. */
+[data-sonner-toast].cn-toast {
+  padding-right: 3.5rem;
+}
+[data-sonner-toast] .cn-toast-close {
+  left: auto;
+  right: 0.375rem;
+  top: 0.375rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  transform: none;
+}
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

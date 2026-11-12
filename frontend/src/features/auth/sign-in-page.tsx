@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Field, FormAlert } from "@/components/common/form-field";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/common/password-input";
 import { useAuth } from "@/features/auth/auth-context";
 import { controlProps } from "@/lib/forms";
 
@@ -119,7 +120,7 @@ export default function SignInPage() {
               Money with a plan
             </p>
             <h1 className="text-4xl font-semibold leading-tight xl:text-5xl">
-              See where your money goesâ€”and where it can take you.
+              See where your money goes—and where it can take you.
             </h1>
             <p className="mt-5 max-w-lg text-base leading-7 text-emerald-50/80">
               Track spending, plan meaningful purchases, and make confident
@@ -218,11 +219,10 @@ export default function SignInPage() {
                     )
                   }
                 >
-                  <Input
+                  <PasswordInput
                     {...controlProps("password", fieldErrors.password)}
                     className="h-11 rounded-xl sm:h-11"
                     name="password"
-                    type="password"
                     autoComplete={
                       mode === "sign-up" ? "new-password" : "current-password"
                     }
@@ -238,8 +238,8 @@ export default function SignInPage() {
                 >
                   {submitting === "email"
                     ? mode === "sign-in"
-                      ? "Signing inâ€¦"
-                      : "Creating accountâ€¦"
+                      ? "Signing in…"
+                      : "Creating account…"
                     : mode === "sign-in"
                       ? "Sign in"
                       : "Create account"}
