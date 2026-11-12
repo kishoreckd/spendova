@@ -1,6 +1,6 @@
 # Database Schema
 
-> Sections 1â€“18 describe the **target** model. What exists today is listed first.
+> Sections 1–18 describe the **target** model. What exists today is listed first.
 
 ## 0. Implemented schema (migration head `20261028_0014`)
 

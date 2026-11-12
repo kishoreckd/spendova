@@ -3,6 +3,8 @@
 from datetime import datetime
 from typing import Literal
 
+from pydantic import Field
+
 from app.core.schema import ApiModel
 
 
@@ -11,6 +13,9 @@ class HealthRead(ApiModel):
     version: str
     time: datetime
     db: Literal["ok"]
+    database_latency_ms: float
+    schema_status: Literal["ready"] = Field(alias="schema")
+    migrations: Literal["up_to_date"]
     email: Literal["configured", "not_configured"]
 
 

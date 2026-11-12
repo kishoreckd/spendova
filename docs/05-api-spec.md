@@ -29,7 +29,7 @@ need a Spendova access token; data routes also need a verified email when auth i
 | DELETE | `/accounts/{id}` | Archive |
 | GET / POST | `/categories` | List (first call seeds defaults; optional `include_archived=true` for history) / create |
 | PATCH / DELETE | `/categories/{id}` | Edit / archive |
-| GET | `/transactions` | `limit` â‰¤ 200, `offset`, `from_date`, `to_date`, `account_id`, `category_id`, literal case-insensitive `search`, `kind`, `status`, `currency` |
+| GET | `/transactions` | `limit` ≤ 200, `offset`, `from_date`, `to_date`, `account_id`, `category_id`, literal case-insensitive `search`, `kind`, `status`, `currency` |
 | POST | `/transactions` | Create (Idem). Optional `recurring_rule_id` advances that bill |
 | DELETE | `/transactions/{id}` | Void (keeps history) |
 | GET | `/dashboard` | `year`, `month`, `account_id`, `currency`: income, spending, cash flow, categories |
@@ -62,7 +62,7 @@ need a Spendova access token; data routes also need a verified email when auth i
 | POST | `/loans/{id}/payments` | Pay the next EMI as an expense from the paying account (Idem) |
 | POST | `/loans/{id}/close` | Close (e.g. foreclosure) and stop the reminder |
 
-Loan terms: `principal`, `tenure_months` (1â€“480), `first_due_on`, `processing_fee`, and the rate
+Loan terms: `principal`, `tenure_months` (1–480), `first_due_on`, `processing_fee`, and the rate
 and/or EMI. With only the EMI, the effective annual rate is solved for and
 `summary.rate_is_estimated` is true. `installments_paid_before` defaults to EMIs due before today.
 

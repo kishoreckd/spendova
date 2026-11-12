@@ -1,7 +1,7 @@
 from datetime import UTC, datetime, timedelta
 from secrets import compare_digest
 from threading import Lock
-from time import monotonic
+from time import monotonic, perf_counter
 
 from fastapi import APIRouter, Depends, Header
 from fastapi.security import APIKeyHeader
@@ -20,6 +20,7 @@ from app.schemas.health import EmailHealthRead, HealthRead, TestEmailRead
 from app.services import email_outbox_service, email_service
 from app.services.email_config import email_enabled
 from app.services.email_service import EmailDeliveryResult
+from app.services.health_service import database_readiness
 from app.utils.validation.json_validator import JsonResponse
 
 router = APIRouter(tags=["operations"])
@@ -32,19 +33,31 @@ _test_key_header = APIKeyHeader(name="X-Email-Test-Key", auto_error=False)
 
 @router.get("/health", response_model=HealthRead)
 def health(db: DbSession):
-    """Liveness and database reachability."""
+    """Database connectivity, latency, required tables, and migration readiness."""
     data = {
         "status": "ok",
         "version": get_settings().app_version,
         "time": datetime.now(UTC),
         "db": "ok",
+        "database_latency_ms": None,
+        "schema": "unknown",
+        "migrations": "unknown",
         "email": "configured" if email_enabled() else "not_configured",
     }
     try:
+        started = perf_counter()
         db.execute(text("SELECT 1"))
+        data["database_latency_ms"] = round((perf_counter() - started) * 1000, 2)
     except SQLAlchemyError:
         data.update(status="degraded", db="unreachable", code="SERVICE_UNAVAILABLE")
         return JsonResponse.error("Database unavailable", data, status_code=503)
+    try:
+        data.update(database_readiness(db))
+    except SQLAlchemyError:
+        data.update(schema="check_failed", migrations="unknown")
+    if data["schema"] != "ready" or data["migrations"] != "up_to_date":
+        data.update(status="degraded", code="SERVICE_UNAVAILABLE")
+        return JsonResponse.error("Database schema is not ready", data, status_code=503)
     return JsonResponse.success("Spendova API is healthy", data)
 
 

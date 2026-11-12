@@ -23,10 +23,10 @@ available at `http://localhost:8000/docs` outside production.
 
 The API runs on Vercel as a serverless FastAPI function (same setup as Vaultessa).
 
-1. Vercel â†’ **Add New Project** â†’ import `kishoreckd/spendova` â†’ **Root Directory = `backend`**.
+1. Vercel → **Add New Project** → import `kishoreckd/spendova` → **Root Directory = `backend`**.
    Vercel installs from `pyproject.toml` and serves `app.main:app` (`[tool.vercel]`).
 2. Add the variables from [`.env.production.example`](.env.production.example) under
-   Settings â†’ Environment Variables (Production). With `ENVIRONMENT=production` the API refuses
+   Settings → Environment Variables (Production). With `ENVIRONMENT=production` the API refuses
    to start unless `AUTH_REQUIRED=true`, `JWT_ACCESS_SECRET`, `OTP_SECRET` and
    `DATA_ENCRYPTION_KEY` are separate 32+ character values, and Brevo SMTP settings are complete.
 3. Use Supabase's **transaction pooler** URL (port 6543) for `DATABASE_URL`. On Vercel the app
@@ -34,9 +34,9 @@ The API runs on Vercel as a serverless FastAPI function (same setup as Vaultessa
 4. Migrations: Vercel has no pre-deploy hook, so `.github/workflows/migrate-database.yml` runs
    `alembic upgrade head` on every push to `main` that touches the schema. Add the repository
    secret `PRODUCTION_DIRECT_URL` (Supabase **session** pooler, port 5432) once. Keep
-   migrations backward compatible â€” the new API may go live a minute before they finish.
+   migrations backward compatible — the new API may go live a minute before they finish.
 5. Email retries: emails go out right after each request; failures are retried by Vercel Cron
-   calling `/cron/email-outbox` (schedule in `vercel.json`, daily on the Hobby plan â€” tighten it
+   calling `/cron/email-outbox` (schedule in `vercel.json`, daily on the Hobby plan — tighten it
    to e.g. `*/15 * * * *` on Pro). Set `CRON_SECRET` so only Vercel can call it.
 6. Set the frontend deployment's server-only `BACKEND_URL` to the API HTTPS origin and
    `VITE_API_BASE_PATH=/api/v1`. Put the frontend origin in backend `CORS_ORIGINS` and `APP_URL`.
@@ -99,7 +99,7 @@ Errors have `data.code` and optional field `data.details`. Request validation us
 HTTP 204 has no body. Swagger describes the envelope while routers validate/filter the DTO.
 
 To protect docs locally or enable protected production docs, set `ENABLE_API_DOCS=true`,
-`SWAGGER_USERNAME`, and `SWAGGER_PASSWORD` (8â€“1024 characters) in your own environment.
+`SWAGGER_USERNAME`, and `SWAGGER_PASSWORD` (8–1024 characters) in your own environment.
 `SWAGGER_SESSION_TTL_MINUTES` defaults to 60. Documentation login is separate from account login.
 When disabled, documentation is public locally and unavailable in production.
 

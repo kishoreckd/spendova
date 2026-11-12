@@ -30,6 +30,9 @@ def test_health_reports_database(api):
     body = data(api.get("/health"))
     assert body["status"] == "ok"
     assert body["db"] == "ok"
+    assert body["schema"] == "ready"
+    assert body["migrations"] == "up_to_date"
+    assert body["database_latency_ms"] >= 0
 
 
 def test_dashboard_month_is_validated(api):
