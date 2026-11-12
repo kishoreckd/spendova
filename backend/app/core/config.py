@@ -120,9 +120,9 @@ class Settings(BaseSettings):
             if (
                 not self.swagger_password
                 or not self.swagger_password.strip()
-                or not 16 <= len(self.swagger_password) <= 1024
+                or not 8 <= len(self.swagger_password) <= 1024
             ):
-                raise ValueError("SWAGGER_PASSWORD must be between 16 and 1024 characters")
+                raise ValueError("SWAGGER_PASSWORD must be between 8 and 1024 characters")
         if not self.is_production:
             return self
         problems = []

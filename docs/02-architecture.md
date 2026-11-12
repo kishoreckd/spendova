@@ -70,7 +70,7 @@ the actual `{status, message, data}` wire envelope while routers retain their DT
 for validation and filtering. The Swagger Authorize button accepts a Spendova access token.
 
 Like the Password/Vaultessa backend, `ENABLE_API_DOCS=true` enables a separate documentation
-login using `SWAGGER_USERNAME` and `SWAGGER_PASSWORD` (16–1024 characters). The session lasts
+login using `SWAGGER_USERNAME` and `SWAGGER_PASSWORD` (8–1024 characters). The session lasts
 `SWAGGER_SESSION_TTL_MINUTES` (default 60), uses an HttpOnly, SameSite=Strict cookie (Secure in
 production), and is invalidated by changing the credentials or OTP secret. Login/logout require
 a same-origin request. Schema aliases and ReDoc require the same authentication. With the flag

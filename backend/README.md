@@ -99,7 +99,7 @@ Errors have `data.code` and optional field `data.details`. Request validation us
 HTTP 204 has no body. Swagger describes the envelope while routers validate/filter the DTO.
 
 To protect docs locally or enable protected production docs, set `ENABLE_API_DOCS=true`,
-`SWAGGER_USERNAME`, and `SWAGGER_PASSWORD` (16â€“1024 characters) in your own environment.
+`SWAGGER_USERNAME`, and `SWAGGER_PASSWORD` (8â€“1024 characters) in your own environment.
 `SWAGGER_SESSION_TTL_MINUTES` defaults to 60. Documentation login is separate from account login.
 When disabled, documentation is public locally and unavailable in production.
 
