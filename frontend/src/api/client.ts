@@ -1,8 +1,19 @@
-import { auth } from "@/lib/firebase";
+import {
+  clearSession,
+  getAccessToken,
+  getSessionEpoch,
+  setAccessToken,
+} from "@/lib/session";
 
-const API_URL = (
-  import.meta.env.VITE_API_URL ?? "http://localhost:8000/api/v1"
-).replace(/\/$/, "");
+const API_URL = (import.meta.env.VITE_API_BASE_PATH ?? "/api/v1").replace(
+  /\/$/,
+  "",
+);
+if (!API_URL.startsWith("/") || API_URL.startsWith("//")) {
+  throw new Error(
+    "VITE_API_BASE_PATH must be a same-origin path such as /api/v1",
+  );
+}
 
 export class ApiError extends Error {
   readonly status: number;
@@ -35,6 +46,8 @@ export type ApiEnvelope<T> =
   | { status: "error"; message: string; data: ErrorData | null };
 
 type RequestOptions = {
+  skipRefresh?: boolean;
+  signal?: AbortSignal;
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;
   /** Makes retried writes safe: the server returns the original result for a repeated key. */
@@ -52,12 +65,20 @@ function fieldErrorsFrom(data: ErrorData | null | undefined) {
 /** Calls the Spendova API and unwraps the `{status, message, data}` envelope. */
 export async function apiFetch<T>(
   path: string,
-  { method = "GET", body, idempotencyKey }: RequestOptions = {},
+  {
+    method = "GET",
+    body,
+    idempotencyKey,
+    signal,
+    skipRefresh = false,
+  }: RequestOptions = {},
 ): Promise<T> {
   const headers: Record<string, string> = {};
+  const requestEpoch = getSessionEpoch();
   if (body !== undefined) headers["Content-Type"] = "application/json";
   if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
-  const token = await auth.currentUser?.getIdToken();
+  const token = getAccessToken();
+  signal?.throwIfAborted();
   if (token) headers.Authorization = `Bearer ${token}`;
 
   let response: Response;
@@ -65,20 +86,48 @@ export async function apiFetch<T>(
     response = await fetch(`${API_URL}${path}`, {
       method,
       headers,
+      signal,
+      credentials: "include",
       body: body === undefined ? undefined : JSON.stringify(body),
     });
-  } catch {
+  } catch (reason) {
+    if (signal?.aborted) throw reason;
     throw new ApiError(
       0,
       "NETWORK",
       "Spendova can't be reached right now. Check your connection and try again.",
     );
   }
+  if (
+    response.status === 401 &&
+    !skipRefresh &&
+    !path.startsWith("/auth/login") &&
+    !path.startsWith("/auth/register") &&
+    !path.startsWith("/auth/refresh") &&
+    !path.startsWith("/auth/password-reset")
+  ) {
+    if (getSessionEpoch() !== requestEpoch)
+      throw new ApiError(
+        401,
+        "SESSION_CHANGED",
+        "The signed-in account changed. Please try again.",
+      );
+    await refreshAccessToken();
+    signal?.throwIfAborted();
+    return apiFetch<T>(path, {
+      method,
+      body,
+      idempotencyKey,
+      signal,
+      skipRefresh: true,
+    });
+  }
   if (response.status === 204) return undefined as T;
 
   const envelope = (await response
     .json()
     .catch(() => null)) as ApiEnvelope<T> | null;
+  signal?.throwIfAborted();
   if (!response.ok || envelope?.status === "error") {
     const data = envelope?.status === "error" ? envelope.data : null;
     throw new ApiError(
@@ -99,6 +148,43 @@ export async function apiFetch<T>(
     );
   }
   return envelope.data;
+}
+
+let refreshing: Promise<void> | null = null;
+export function refreshAccessToken(): Promise<void> {
+  if (refreshing) return refreshing;
+  const epoch = getSessionEpoch();
+  const run = async () => {
+    try {
+      if (getSessionEpoch() !== epoch) throw new Error("Session changed");
+      const data = await apiFetch<{ access_token: string }>("/auth/refresh", {
+        method: "POST",
+        skipRefresh: true,
+      });
+      if (getSessionEpoch() !== epoch) throw new Error("Session changed");
+      setAccessToken(data.access_token);
+    } catch (reason) {
+      if (
+        reason instanceof ApiError &&
+        reason.status === 401 &&
+        getSessionEpoch() === epoch
+      )
+        clearSession();
+      throw reason;
+    }
+  };
+  refreshing = (
+    typeof navigator !== "undefined" && navigator.locks
+      ? navigator.locks.request("spendova-refresh", run)
+      : run()
+  ).finally(() => {
+    refreshing = null;
+  });
+  return refreshing;
+}
+
+export async function waitForRefresh() {
+  await refreshing?.catch(() => undefined);
 }
 
 export function newIdempotencyKey(): string {

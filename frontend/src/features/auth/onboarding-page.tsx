@@ -22,7 +22,7 @@ import { Progress } from "@/components/ui/progress";
 import { useAuth } from "@/features/auth/auth-context";
 import { accountsApi } from "@/api/accounts/api";
 import { recurringApi } from "@/api/recurring/api";
-import { trackEvent } from "@/lib/firebase";
+
 import { localDateISO } from "@/lib/format";
 import { controlProps, errorMessage, notifySuccess } from "@/lib/forms";
 
@@ -157,9 +157,7 @@ export default function OnboardingPage() {
         time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         onboarding_completed: true,
       });
-      void trackEvent(
-        createSetup ? "onboarding_completed" : "onboarding_skipped",
-      );
+
       notifySuccess("You're all set", "Your Spendova workspace is ready.");
       navigate("/", { replace: true });
     } catch (reason) {
@@ -340,7 +338,7 @@ export default function OnboardingPage() {
                 </Button>
                 <Button loading={saving} onClick={next}>
                   {saving
-                    ? "Saving…"
+                    ? "SavingÃ¢â‚¬Â¦"
                     : step === 3
                       ? "Finish setup"
                       : "Continue"}

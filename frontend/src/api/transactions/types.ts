@@ -34,6 +34,10 @@ export type TransactionItem = {
 };
 
 export type TransactionFilters = {
+  search?: string;
+  kind?: TransactionKind;
+  status?: string;
+  currency?: string;
   limit?: number;
   offset?: number;
   from?: string;

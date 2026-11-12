@@ -3,15 +3,26 @@ import type {
   PasswordResetRequested,
   PasswordResetVerified,
   ProfileUpdate,
-  SignInSync,
+  LoginResponse,
   SpendovaUser,
   VerificationCodeSent,
 } from "./types";
 
 export const authApi = {
-  /** Creates the profile on first sign-in and keeps name and photo current afterwards. */
-  syncSignIn: (body: SignInSync) =>
-    apiFetch<SpendovaUser>("/auth/google", { method: "POST", body }),
+  login: (email: string, password: string) =>
+    apiFetch<LoginResponse>("/auth/login", {
+      method: "POST",
+      body: { email, password },
+      skipRefresh: true,
+    }),
+  register: (name: string, email: string, password: string) =>
+    apiFetch<LoginResponse>("/auth/register", {
+      method: "POST",
+      body: { name, email, password },
+      skipRefresh: true,
+    }),
+  logout: () =>
+    apiFetch<void>("/auth/logout", { method: "POST", skipRefresh: true }),
   me: () => apiFetch<SpendovaUser>("/auth/me"),
   updateProfile: (body: ProfileUpdate) =>
     apiFetch<SpendovaUser>("/auth/me", { method: "PATCH", body }),

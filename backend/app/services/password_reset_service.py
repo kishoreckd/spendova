@@ -129,6 +129,7 @@ def complete_reset(
         identity.sign_out_everywhere(user.id)
     except IdentityError:
         logger.warning("Password changed but other sessions could not be revoked")
+    user.email_verified = True
     db.delete(record)
     notify.password_changed(db, background, user)
     return user

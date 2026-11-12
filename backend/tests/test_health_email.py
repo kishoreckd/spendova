@@ -14,6 +14,7 @@ def _production(**overrides) -> Settings:
         "auth_required": True,
         "firebase_project_id": "spendova-test",
         "otp_secret": SECRET,
+        "jwt_access_secret": SECRET + "jwt",
         "data_encryption_key": SECRET + "x",
         "email_delivery_mode": "smtp",
         "smtp_host": "smtp-relay.brevo.com",

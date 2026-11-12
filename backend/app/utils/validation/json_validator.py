@@ -8,6 +8,7 @@ from typing import Any, Literal
 
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
+from pydantic import ValidationError
 from starlette.background import BackgroundTask
 
 
@@ -40,6 +41,15 @@ class JsonResponse:
     @classmethod
     def error(cls, message: str, data=None, status_code: int = 400, headers=None, background=None) -> JSONResponse:
         return cls.create("error", message, data, status_code, headers, background)
+
+    @classmethod
+    def validation_error(cls, ve: ValidationError, status_code: int = 422, headers=None) -> JSONResponse:
+        """Reference-compatible helper without submitted values or validator context."""
+        details = [
+            {"path": ".".join(str(part) for part in err["loc"]), "message": err["msg"], "errorType": err["type"]}
+            for err in ve.errors()
+        ]
+        return cls.error("Validation error", {"code": "VALIDATION_ERROR", "details": details}, status_code, headers)
 
 
 class ApiJSONResponse(JSONResponse):

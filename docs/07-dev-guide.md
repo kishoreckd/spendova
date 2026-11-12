@@ -12,7 +12,7 @@ Copy-Item .env.example .env          # never commit .env
 
 # Frontend (in frontend/)
 npm ci
-Copy-Item .env.example .env.local    # VITE_API_URL=http://localhost:8000/api/v1
+Copy-Item .env.example .env.local    # /api/v1 proxies to http://127.0.0.1:8000
 npm run dev                          # http://localhost:5173
 ```
 

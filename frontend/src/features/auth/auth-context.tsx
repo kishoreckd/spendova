@@ -1,34 +1,36 @@
-/* oxlint-disable react/only-export-components -- the provider and hook intentionally share one context */
+/* oxlint-disable react/only-export-components -- provider and hook share a context */
 import {
   createContext,
   useCallback,
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
+  type ReactNode,
 } from "react";
-import type { ReactNode } from "react";
-import {
-  GoogleAuthProvider,
-  createUserWithEmailAndPassword,
-  onIdTokenChanged,
-  signInWithEmailAndPassword,
-  signInWithPopup,
-  signOut as firebaseSignOut,
-  updateProfile as updateFirebaseProfile,
-} from "firebase/auth";
-import type { User } from "firebase/auth";
 import { authApi } from "@/api/auth/api";
-import type { ProfileUpdate, SpendovaUser } from "@/api/auth/types";
-import { auth, trackEvent } from "@/lib/firebase";
+import type {
+  LoginResponse,
+  ProfileUpdate,
+  SpendovaUser,
+} from "@/api/auth/types";
+import { ApiError, refreshAccessToken, waitForRefresh } from "@/api/client";
+import {
+  clearSession,
+  getAccessToken,
+  getSessionEpoch,
+  onSessionCleared,
+  startSession,
+} from "@/lib/session";
 import { queryClient } from "@/lib/query-client";
 
 type AuthContextValue = {
-  user: User | null;
+  user: { uid: string } | null;
   profile: SpendovaUser | null;
   loading: boolean;
   error: string | null;
-  signInWithGoogle: () => Promise<SpendovaUser>;
+  retryProfile: () => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<SpendovaUser>;
   signUpWithEmail: (
     name: string,
@@ -40,156 +42,135 @@ type AuthContextValue = {
   signOut: () => Promise<void>;
   updateProfile: (values: ProfileUpdate) => Promise<SpendovaUser>;
 };
-
 const AuthContext = createContext<AuthContextValue | null>(null);
-
-async function syncUser(user: User) {
-  await user.getIdToken();
-  return authApi.syncSignIn({
-    email: user.email,
-    name: user.displayName,
-    photo_url: user.photoURL,
-  });
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<SpendovaUser | null>(null);
+  const [user, setUser] = useState<{ uid: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let currentUid: string | null = null;
-    return onIdTokenChanged(auth, async (firebaseUser) => {
-      // Never show one person's cached data to the next account on this device.
-      if ((firebaseUser?.uid ?? null) !== currentUid) queryClient.clear();
-      currentUid = firebaseUser?.uid ?? null;
-      setUser(firebaseUser);
-      setError(null);
-      if (!firebaseUser) {
-        setProfile(null);
-        setLoading(false);
-        return;
-      }
-      try {
-        setProfile(await syncUser(firebaseUser));
-      } catch (reason) {
+  const generation = useRef(0);
+  const dropProfile = useCallback(() => {
+    ++generation.current;
+    queryClient.clear();
+    setProfile(null);
+    setUser(null);
+    setLoading(false);
+  }, []);
+  const restore = useCallback(async () => {
+    const requestId = ++generation.current;
+    setLoading(true);
+    setError(null);
+    try {
+      await refreshAccessToken();
+      const next = await authApi.me();
+      if (requestId !== generation.current) return;
+      startSession(getAccessToken()!, next.id);
+      setProfile(next);
+      setUser({ uid: next.id });
+    } catch (reason) {
+      if (reason instanceof ApiError && reason.status === 401) return;
+      if (requestId === generation.current) {
+        if (getAccessToken()) setUser({ uid: "pending" });
         setError(
           reason instanceof Error
             ? reason.message
-            : "Could not load your Spendova profile",
+            : "Could not load your profile",
         );
-      } finally {
-        setLoading(false);
       }
-    });
-  }, []);
-
-  const signInWithGoogle = useCallback(async () => {
-    setError(null);
-    const provider = new GoogleAuthProvider();
-    provider.setCustomParameters({ prompt: "select_account" });
-    const result = await signInWithPopup(auth, provider);
-    try {
-      const nextProfile = await syncUser(result.user);
-      setUser(result.user);
-      setProfile(nextProfile);
-      void trackEvent("login_completed", { provider: "google" });
-      return nextProfile;
-    } catch (reason) {
-      await firebaseSignOut(auth);
-      throw reason;
+    } finally {
+      if (requestId === generation.current) setLoading(false);
     }
   }, []);
-
+  useEffect(() => {
+    const unsubscribe = onSessionCleared(dropProfile);
+    // oxlint-disable-next-line react/set-state-in-effect -- restore the external HttpOnly-cookie session on mount
+    void restore();
+    return () => {
+      unsubscribe();
+    };
+  }, [restore, dropProfile]);
+  const acceptLogin = useCallback((result: LoginResponse) => {
+    queryClient.clear();
+    startSession(result.access_token, result.account.id);
+    setProfile(result.account);
+    setUser({ uid: result.account.id });
+    setError(null);
+    setLoading(false);
+  }, []);
   const signInWithEmail = useCallback(
     async (email: string, password: string) => {
-      setError(null);
-      const result = await signInWithEmailAndPassword(auth, email, password);
-      const nextProfile = await syncUser(result.user);
-      setUser(result.user);
-      setProfile(nextProfile);
-      void trackEvent("login_completed", { provider: "password" });
-      return nextProfile;
+      const requestId = ++generation.current;
+      const result = await authApi.login(email, password);
+      if (requestId !== generation.current)
+        throw new Error("Sign-in changed. Please try again.");
+      acceptLogin(result);
+      return result.account;
     },
-    [],
+    [acceptLogin],
   );
-
   const signUpWithEmail = useCallback(
     async (name: string, email: string, password: string) => {
-      setError(null);
-      const result = await createUserWithEmailAndPassword(
-        auth,
-        email,
-        password,
-      );
-      await updateFirebaseProfile(result.user, { displayName: name });
-      await result.user.getIdToken(true);
-      const nextProfile = await syncUser(result.user);
-      setUser(result.user);
-      setProfile(nextProfile);
-      const response = await authApi.sendVerificationCode();
-      void trackEvent("signup_completed", { provider: "password" });
-      return response.development_code;
+      const requestId = ++generation.current;
+      const result = await authApi.register(name, email, password);
+      if (requestId !== generation.current)
+        throw new Error("Sign-in changed. Please try again.");
+      acceptLogin(result);
+      return result.development_code;
     },
+    [acceptLogin],
+  );
+  const sendEmailVerificationCode = useCallback(
+    async () => (await authApi.sendVerificationCode()).development_code,
     [],
   );
-
-  const sendEmailVerificationCode = useCallback(async () => {
-    const response = await authApi.sendVerificationCode();
-    return response.development_code;
-  }, []);
-
   const verifyEmailCode = useCallback(async (code: string) => {
-    const nextProfile = await authApi.confirmVerificationCode(code);
-    setProfile(nextProfile);
-    void trackEvent("email_verified");
-    return nextProfile;
+    const epoch = getSessionEpoch();
+    const next = await authApi.confirmVerificationCode(code);
+    if (epoch === getSessionEpoch()) setProfile(next);
+    return next;
   }, []);
-
-  const signOut = useCallback(async () => {
-    await firebaseSignOut(auth);
-    setProfile(null);
-    queryClient.clear();
-  }, []);
-
   const updateProfile = useCallback(async (values: ProfileUpdate) => {
-    const updated = await authApi.updateProfile(values);
-    setProfile(updated);
-    return updated;
+    const epoch = getSessionEpoch();
+    const next = await authApi.updateProfile(values);
+    if (epoch === getSessionEpoch()) setProfile(next);
+    return next;
   }, []);
-
+  const signOut = useCallback(async () => {
+    await waitForRefresh();
+    await authApi.logout();
+    clearSession();
+    setError(null);
+  }, []);
   const value = useMemo(
     () => ({
       user,
       profile,
       loading,
       error,
-      signInWithGoogle,
+      retryProfile: restore,
       signInWithEmail,
       signUpWithEmail,
       sendEmailVerificationCode,
       verifyEmailCode,
-      signOut,
       updateProfile,
+      signOut,
     }),
     [
       user,
       profile,
       loading,
       error,
-      signInWithGoogle,
+      restore,
       signInWithEmail,
       signUpWithEmail,
       sendEmailVerificationCode,
       verifyEmailCode,
-      signOut,
       updateProfile,
+      signOut,
     ],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
-
 export function useAuth() {
   const context = useContext(AuthContext);
   if (!context) throw new Error("useAuth must be used inside AuthProvider");

@@ -1,0 +1,6 @@
+import { defineConfig } from "vitest/config";
+
+export default defineConfig({
+  resolve: { alias: { "@": import.meta.dirname + "/src" } },
+  test: { environment: "jsdom", include: ["test/**/*.test.{ts,tsx}"], restoreMocks: true },
+});

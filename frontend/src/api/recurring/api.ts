@@ -2,7 +2,8 @@ import { apiFetch, newIdempotencyKey } from "../client";
 import type { RecurringCreate, RecurringItem, RecurringPayment } from "./types";
 
 export const recurringApi = {
-  list: () => apiFetch<RecurringItem[]>("/recurring-rules"),
+  list: (signal?: AbortSignal) =>
+    apiFetch<RecurringItem[]>("/recurring-rules", { signal }),
   create: (body: RecurringCreate) =>
     apiFetch<RecurringItem>("/recurring-rules", { method: "POST", body }),
   /** Records the payment as a transaction and schedules the next due date. */

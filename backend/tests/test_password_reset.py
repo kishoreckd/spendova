@@ -100,13 +100,13 @@ def test_code_locks_after_five_wrong_attempts(api, mailbox, identity):
     assert locked.status_code == 429
 
 
-def test_reset_is_unavailable_without_identity_configuration(api, mailbox):
+def test_reset_uses_local_password_storage_without_firebase(api, mailbox):
     sign_up(api, "no-firebase", email="no-firebase@example.com")
     code = data(api.post(f"{RESET}/request", json={"email": "no-firebase@example.com"}))["development_code"]
     token = data(api.post(f"{RESET}/verify", json={"email": "no-firebase@example.com", "code": code}))["reset_token"]
     response = api.post(f"{RESET}/complete", json={"reset_token": token, "new_password": "NewPass2026"})
-    assert response.status_code == 503
-    assert error(response)["code"] == "SERVICE_UNAVAILABLE"
+    assert response.status_code == 200
+    assert data(response)["email"] == "no-firebase@example.com"
 
 
 def test_templates_escape_user_supplied_values():

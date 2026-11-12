@@ -14,5 +14,6 @@ def get_dashboard(
     year: int | None = Query(default=None, ge=2000, le=2100),
     month: int | None = Query(default=None, ge=1, le=12),
     account_id: str | None = None,
+    currency: str | None = Query(default=None, pattern=r"^[A-Z]{3}$"),
 ):
-    return service.monthly_summary(db, auth.id, year, month, account_id)
+    return service.monthly_summary(db, auth.id, year, month, account_id, currency)

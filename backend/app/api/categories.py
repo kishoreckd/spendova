@@ -9,8 +9,8 @@ router = APIRouter(prefix="/categories", tags=["categories"])
 
 
 @router.get("", response_model=list[CategoryRead])
-def list_categories(auth: Auth, db: DbSession):
-    categories = service.list_categories(db, auth.id)
+def list_categories(auth: Auth, db: DbSession, include_archived: bool = False):
+    categories = service.list_categories(db, auth.id, include_archived)
     db.commit()  # Persist any default categories seeded on first use.
     return categories
 

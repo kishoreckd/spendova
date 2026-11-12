@@ -16,6 +16,7 @@ from app.core.rate_limit import auth_limit
 from app.core.schema import Email, RequestModel
 from app.db.model_helpers import utcnow
 from app.db.models.email_outbox_model import EmailOutbox
+from app.schemas.health import EmailHealthRead, HealthRead, TestEmailRead
 from app.services import email_outbox_service, email_service
 from app.services.email_config import email_enabled
 from app.services.email_service import EmailDeliveryResult
@@ -29,7 +30,7 @@ _check_cache: tuple[float, dict[str, str]] | None = None
 _test_key_header = APIKeyHeader(name="X-Email-Test-Key", auto_error=False)
 
 
-@router.get("/health")
+@router.get("/health", response_model=HealthRead)
 def health(db: DbSession):
     """Liveness and database reachability."""
     data = {
@@ -47,7 +48,7 @@ def health(db: DbSession):
     return JsonResponse.success("Spendova API is healthy", data)
 
 
-@router.get("/health/email")
+@router.get("/health/email", response_model=EmailHealthRead)
 def email_health():
     """Connects and logs in to SMTP without sending mail. Cached per instance for 60 seconds."""
     global _check_cache
@@ -56,6 +57,7 @@ def email_health():
             _check_cache = (monotonic() + 60, email_service.check_connection())
         data = {**_check_cache[1], "cache_seconds": 60}
     if data["stage"] != "complete":
+        data["code"] = "SERVICE_UNAVAILABLE"
         return JsonResponse.error("Email connectivity check failed", data, status_code=503)
     return JsonResponse.success("SMTP login works. Inbox delivery was not tested.", data)
 
@@ -70,10 +72,13 @@ def require_cron_secret(authorization: str | None = Header(default=None)) -> Non
         raise AppError.unauthorized("Invalid cron secret")
 
 
-@router.get("/cron/email-outbox", dependencies=[Depends(require_cron_secret)])
+@router.get("/cron/email-outbox", response_model=dict[str, int], dependencies=[Depends(require_cron_secret)])
 def retry_email_outbox():
     """Resends due emails and prunes old outbox rows (scheduled in backend/vercel.json)."""
-    counts = email_outbox_service.run_once()
+    from app.services import reminder_service
+
+    reminders = reminder_service.run_once()
+    counts = {**email_outbox_service.run_once(), "reminders_queued": reminders["queued"]}
     return JsonResponse.success("Email outbox processed", counts)
 
 
@@ -90,7 +95,12 @@ class TestEmailRequest(RequestModel):
     message: str = Field(default="If you received this, Spendova email delivery works.", min_length=1, max_length=1000)
 
 
-@router.post("/health/email", dependencies=[Depends(auth_limit), Depends(require_email_test_key)])
+@router.post(
+    "/health/email",
+    response_model=TestEmailRead,
+    status_code=202,
+    dependencies=[Depends(auth_limit), Depends(require_email_test_key)],
+)
 def send_test_email(payload: TestEmailRequest, db: DbSession):
     """Sends one labelled test email through the outbox; at most one per minute."""
     if db.get_bind().dialect.name == "postgresql":
@@ -130,5 +140,6 @@ def send_test_email(payload: TestEmailRequest, db: DbSession):
     result = results[0]
     data = {"submission": result.status, "message_id": result.message_id, "test_id": outbox_id}
     if result.status != "accepted":
+        data["code"] = "SERVICE_UNAVAILABLE"
         return JsonResponse.error(result.message, data, status_code=503)
     return JsonResponse.success(result.message, data, status_code=202)

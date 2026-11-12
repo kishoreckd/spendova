@@ -5,14 +5,17 @@ from pathlib import Path
 # Must be set before the app (and its settings/engine) is imported. These override backend/.env.
 _SQLITE_FILE = Path(tempfile.gettempdir()) / f"spendova-test-{os.getpid()}.db"
 os.environ["ENVIRONMENT"] = "test"
+os.environ["JWT_ACCESS_SECRET"] = "isolated-test-access-signing-key-2026-only"
 os.environ["DATABASE_URL"] = os.environ.get("TEST_DATABASE_URL", f"sqlite:///{_SQLITE_FILE.as_posix()}")
 os.environ["AUTH_REQUIRED"] = "false"
 os.environ["RATE_LIMIT_ENABLED"] = "false"
 os.environ["EMAIL_OUTBOX_WORKER_ENABLED"] = "false"
+os.environ["REMINDERS_ENABLED"] = "false"
 # Never send real email or touch real Firebase from tests.
 os.environ["EMAIL_DELIVERY_MODE"] = "console"
 os.environ["SMTP_HOST"] = ""
 os.environ["FIREBASE_SERVICE_ACCOUNT_JSON"] = ""
+os.environ["OPENAI_API_KEY"] = ""
 os.environ["APP_URL"] = "http://localhost:5173"
 os.environ["CORS_ORIGINS"] = "http://localhost:5173"
 
@@ -22,7 +25,7 @@ from alembic.config import Config  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy import text  # noqa: E402
 
-from app.core.rate_limit import auth_limit, global_limit  # noqa: E402
+from app.core.rate_limit import auth_limit, global_limit, refresh_limit  # noqa: E402
 from app.db.session import Base, engine  # noqa: E402
 from app.main import app  # noqa: E402
 from app.services import email_service  # noqa: E402
@@ -58,6 +61,7 @@ def api(database):
             conn.execute(table.delete())
     global_limit.reset()
     auth_limit.reset()
+    refresh_limit.reset()
     with TestClient(app) as client:
         yield client
 

@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -25,6 +25,10 @@ class TransactionFilters:
     account_id: str | None = None
     limit: int = 100
     offset: int = 0
+    search: str | None = None
+    kind: str | None = None
+    status: str | None = None
+    currency: str | None = None
 
 
 def ledger_entries(kind: TransactionType, amount: Decimal, source: str, destination: str) -> list[LedgerEntry]:
@@ -46,6 +50,24 @@ def find_by_idempotency_key(db: Session, user_id: str, key: str) -> Transaction 
 
 def list_transactions(db: Session, user_id: str, filters: TransactionFilters) -> list[Transaction]:
     query = select(Transaction).where(Transaction.user_id == user_id)
+    if filters.search:
+        # contains(autoescape=True) treats '%' and '_' as literal search text.
+        needle = filters.search.strip().lower()
+        query = query.where(
+            or_(
+                *[
+                    func.lower(column).contains(needle, autoescape=True)
+                    for column in (Transaction.merchant, Transaction.source, Transaction.destination, Transaction.notes)
+                ]
+            )
+        )
+    for column, value in (
+        (Transaction.kind, filters.kind),
+        (Transaction.status, filters.status),
+        (Transaction.currency, filters.currency),
+    ):
+        if value:
+            query = query.where(column == value)
     if filters.from_date:
         query = query.where(Transaction.occurred_on >= filters.from_date)
     if filters.to_date:
@@ -56,7 +78,7 @@ def list_transactions(db: Session, user_id: str, filters: TransactionFilters) ->
         account = accounts_service.get_active_account(db, user_id, filters.account_id)
         query = query.where(accounts_service.touches_account(account))
     query = (
-        query.order_by(Transaction.occurred_on.desc(), Transaction.created_at.desc())
+        query.order_by(Transaction.occurred_on.desc(), Transaction.created_at.desc(), Transaction.id.desc())
         .offset(filters.offset)
         .limit(filters.limit)
     )

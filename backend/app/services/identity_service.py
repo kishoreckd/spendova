@@ -1,77 +1,45 @@
-"""Server-side account operations backed by the Firebase Admin SDK.
+"""Database-backed password changes and session revocation."""
 
-The Admin SDK needs a service-account key (FIREBASE_SERVICE_ACCOUNT_JSON).
-Keep this module small so tests can replace `optional_identity_provider`.
-"""
+from typing import Protocol
 
-import json
-from functools import lru_cache
-from typing import Any, Protocol
+from fastapi import Depends
+from sqlalchemy.orm import Session
 
-from app.core.config import get_settings
-
-
-class IdentityUnavailable(RuntimeError):
-    """Raised when server-side account changes are not configured."""
+from app.core.passwords import hash_password
+from app.db.models.auth_model import PasswordCredential
+from app.db.session import get_db
+from app.services.session_service import revoke_all
 
 
 class IdentityError(RuntimeError):
-    """Raised when Firebase rejects or fails an account operation."""
+    """Account update failed."""
 
 
 class IdentityProvider(Protocol):
     def sign_in_methods(self, uid: str) -> set[str]: ...
-
     def set_password(self, uid: str, password: str) -> None: ...
-
     def sign_out_everywhere(self, uid: str) -> None: ...
 
 
-class FirebaseIdentity:
-    def __init__(self, service_account: dict[str, Any]) -> None:
-        import firebase_admin
-        from firebase_admin import auth, credentials
-
-        self._auth = auth
-        try:
-            self._app = firebase_admin.get_app("spendova-admin")
-        except ValueError:
-            self._app = firebase_admin.initialize_app(credentials.Certificate(service_account), name="spendova-admin")
+class LocalIdentity:
+    def __init__(self, db: Session):
+        self.db = db
 
     def sign_in_methods(self, uid: str) -> set[str]:
-        try:
-            user = self._auth.get_user(uid, app=self._app)
-        except Exception as exc:
-            raise IdentityError("Could not look up the account") from exc
-        return {provider.provider_id for provider in user.provider_data}
+        return {"password"}
 
     def set_password(self, uid: str, password: str) -> None:
-        try:
-            self._auth.update_user(uid, password=password, app=self._app)
-        except Exception as exc:
-            raise IdentityError("Could not update the password") from exc
+        credential = self.db.get(PasswordCredential, uid)
+        if credential:
+            credential.password_hash = hash_password(password)
+            credential.failed_logins = 0
+            credential.locked_until = None
+        else:
+            self.db.add(PasswordCredential(user_id=uid, password_hash=hash_password(password)))
 
     def sign_out_everywhere(self, uid: str) -> None:
-        try:
-            self._auth.revoke_refresh_tokens(uid, app=self._app)
-        except Exception as exc:
-            raise IdentityError("Could not sign out other sessions") from exc
+        revoke_all(self.db, uid)
 
 
-@lru_cache
-def _firebase_identity() -> FirebaseIdentity:
-    raw = get_settings().firebase_service_account_json
-    if not raw:
-        raise IdentityUnavailable("Password reset is not configured on the server")
-    try:
-        return FirebaseIdentity(json.loads(raw))
-    except (ValueError, KeyError) as exc:
-        raise IdentityUnavailable("The Firebase service account is invalid") from exc
-
-
-def optional_identity_provider() -> IdentityProvider | None:
-    """FastAPI dependency: the provider, or None when it is not configured. Tests override it."""
-    try:
-        return _firebase_identity()
-    except IdentityUnavailable:
-        return None
+def optional_identity_provider(db: Session = Depends(get_db)) -> IdentityProvider:
+    return LocalIdentity(db)

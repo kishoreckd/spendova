@@ -10,7 +10,7 @@ import { invalidateLedger, queryClient, queryKeys } from "@/lib/query-client";
 export function useRecurring(enabled = true) {
   return useQuery({
     queryKey: queryKeys.recurring,
-    queryFn: recurringApi.list,
+    queryFn: ({ signal }) => recurringApi.list(signal),
     enabled,
   });
 }
@@ -49,7 +49,10 @@ export function usePayRecurring() {
 /* Budgets */
 
 export function useBudgets() {
-  return useQuery({ queryKey: queryKeys.budgets, queryFn: budgetsApi.list });
+  return useQuery({
+    queryKey: queryKeys.budgets,
+    queryFn: ({ signal }) => budgetsApi.list(signal),
+  });
 }
 
 /** Spend against each budget, fetched in parallel and cached per budget. */
@@ -87,7 +90,10 @@ export function useDeleteBudget() {
 /* Goals */
 
 export function useGoals() {
-  return useQuery({ queryKey: queryKeys.goals, queryFn: goalsApi.list });
+  return useQuery({
+    queryKey: queryKeys.goals,
+    queryFn: ({ signal }) => goalsApi.list(signal),
+  });
 }
 
 export function useCreateGoal() {

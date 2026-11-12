@@ -8,3 +8,7 @@ __pycache__
 tests
 .git
 .github
+
+.env.*
+.ruff_cache
+app/email_previews

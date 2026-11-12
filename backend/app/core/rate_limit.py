@@ -43,3 +43,4 @@ class RateLimiter:
 global_limit = RateLimiter("rate_limit_global_requests", "global")
 # Public account-recovery and code-sending routes.
 auth_limit = RateLimiter("rate_limit_auth_requests", "auth")
+refresh_limit = RateLimiter("rate_limit_refresh_requests", "refresh")

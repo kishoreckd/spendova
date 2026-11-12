@@ -13,7 +13,7 @@ from app.services.budgets_service import month_bounds
 
 
 def monthly_summary(
-    db: Session, user_id: str, year: int | None, month: int | None, account_id: str | None
+    db: Session, user_id: str, year: int | None, month: int | None, account_id: str | None, currency: str | None = None
 ) -> DashboardSummary:
     today = date.today()
     year, month = year or today.year, month or today.month
@@ -27,6 +27,8 @@ def monthly_summary(
     if account_id:
         account = accounts_service.get_active_account(db, user_id, account_id)
         period.append(accounts_service.touches_account(account))
+    if currency:
+        period.append(Transaction.currency == currency)
 
     totals: dict[str, Decimal] = {
         kind: Decimal(amount)

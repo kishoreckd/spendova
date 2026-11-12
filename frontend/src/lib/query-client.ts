@@ -20,6 +20,8 @@ export const queryClient = new QueryClient({
 
 /** Every server-state key lives here so invalidation stays consistent across features. */
 export const queryKeys = {
+  preferences: ["preferences"] as const,
+  insights: ["insights"] as const,
   accounts: ["accounts"] as const,
   categories: ["categories"] as const,
   transactions: (filters: TransactionFilters = {}) =>
@@ -30,8 +32,13 @@ export const queryKeys = {
   budgetStatus: (id: string) => ["budgets", id, "status"] as const,
   goals: ["goals"] as const,
   assets: ["assets"] as const,
-  dashboard: (year: number, month: number, accountId?: string) =>
-    ["dashboard", year, month, accountId ?? "all"] as const,
+  dashboard: (
+    year: number,
+    month: number,
+    accountId?: string,
+    currency?: string,
+  ) =>
+    ["dashboard", year, month, accountId ?? "all", currency ?? "all"] as const,
   loans: ["loans"] as const,
   loansOverview: ["loans", "overview"] as const,
   loanSchedule: (id: string) => ["loans", id, "schedule"] as const,
@@ -44,6 +51,7 @@ export const queryKeys = {
 export function invalidateLedger() {
   return Promise.all(
     [
+      "insights",
       "transactions",
       "accounts",
       "dashboard",

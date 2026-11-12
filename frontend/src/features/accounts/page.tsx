@@ -7,6 +7,7 @@ import { PageActions } from "@/components/layout/page-actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useMoney } from "@/hooks/use-money";
+import { formatMoney } from "@/lib/format";
 import { errorMessage, notifySuccess } from "@/lib/forms";
 import { AccountFormDialog } from "./account-form-dialog";
 import {
@@ -34,8 +35,11 @@ export default function AccountsPage() {
     : "";
 
   const netWorth = useMemo(
-    () => accounts.reduce((sum, account) => sum + accountBalance(account), 0),
-    [accounts],
+    () =>
+      accounts
+        .filter((account) => account.currency === currency.currency)
+        .reduce((sum, account) => sum + accountBalance(account), 0),
+    [accounts, currency.currency],
   );
 
   return (
@@ -50,7 +54,9 @@ export default function AccountsPage() {
       {!!accounts.length && (
         <Card className="border-primary/15 bg-gradient-to-br from-primary/[0.07] via-card to-card">
           <CardContent className="p-5">
-            <p className="text-sm text-muted-foreground">Net worth</p>
+            <p className="text-sm text-muted-foreground">
+              Net worth ({currency.currency})
+            </p>
             <p
               className={`money mt-1 text-3xl font-semibold ${netWorth < 0 ? "text-rose-600" : ""}`}
             >
@@ -89,6 +95,8 @@ export default function AccountsPage() {
             const Icon = type.icon;
             const balance = accountBalance(account);
             const projection = projectedDepositValue(account);
+            const accountMoney = (value: string | number) =>
+              formatMoney(value, account.currency, currency.locale);
             return (
               <Card
                 key={account.id}
@@ -109,6 +117,19 @@ export default function AccountsPage() {
                     <p className="text-xs text-muted-foreground">
                       {type.label}
                     </p>
+                    {account.maturity_on && (
+                      <p className="text-xs text-muted-foreground">
+                        Matures {currency.date(account.maturity_on)}
+                      </p>
+                    )}
+                    {account.deposit_projection?.estimated_interest && (
+                      <p className="text-xs text-muted-foreground">
+                        Estimated interest{" "}
+                        {accountMoney(
+                          account.deposit_projection.estimated_interest,
+                        )}
+                      </p>
+                    )}
                     {account.institution && (
                       <p className="truncate text-xs text-muted-foreground">
                         {account.institution}
@@ -124,14 +145,14 @@ export default function AccountsPage() {
                     )}
                     {projection !== null && (
                       <p className="mt-1 text-xs font-medium text-primary">
-                        Est. maturity {currency.format(projection)}
+                        Est. maturity {accountMoney(projection)}
                       </p>
                     )}
                   </div>
                   <p
                     className={`money font-semibold ${balance < 0 ? "text-rose-600" : ""}`}
                   >
-                    {currency.format(balance)}
+                    {accountMoney(balance)}
                     <span className="mt-0.5 block text-right text-[10px] font-normal text-muted-foreground">
                       {owesMoney(account.account_type)
                         ? "Outstanding"

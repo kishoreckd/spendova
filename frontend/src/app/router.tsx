@@ -3,6 +3,8 @@ import { lazy, Suspense } from "react";
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import { AppShell } from "@/components/layout/app-shell";
 import { LoadingScreen } from "@/components/common/loading-screen";
+import { ProfileRecovery } from "@/features/auth/profile-recovery";
+import { RouteError } from "@/components/common/route-error";
 import { useAuth } from "@/features/auth/auth-context";
 const Dashboard = lazy(() => import("@/features/dashboard/page"));
 const Demo = lazy(() => import("@/features/dashboard/demo-page"));
@@ -18,6 +20,7 @@ const Planning = lazy(() => import("@/features/planning/page"));
 const More = lazy(() => import("@/features/more/page"));
 const Accounts = lazy(() => import("@/features/accounts/page"));
 const Assets = lazy(() => import("@/features/assets/page"));
+const Assistant = lazy(() => import("@/features/assistant/page"));
 const Loans = lazy(() => import("@/features/loans/page"));
 const Categories = lazy(() => import("@/features/categories/page"));
 const Settings = lazy(() => import("@/features/settings/page"));
@@ -29,15 +32,13 @@ function needsEmailVerification(
   user: ReturnType<typeof useAuth>["user"],
   verified: boolean | undefined,
 ) {
-  const isGoogleAccount = user?.providerData.some(
-    (provider) => provider.providerId === "google.com",
-  );
-  return !isGoogleAccount && !verified;
+  return !!user && !verified;
 }
 function ProtectedShell() {
   const { user, profile, loading } = useAuth();
   if (loading) return <FullPageLoading />;
   if (!user) return <Navigate to="/sign-in" replace />;
+  if (!profile) return <ProfileRecovery />;
   if (needsEmailVerification(user, profile?.email_verified))
     return <Navigate to="/verify-email" replace />;
   if (!profile?.onboarding_completed)
@@ -48,6 +49,7 @@ function OnboardingRoute() {
   const { user, profile, loading } = useAuth();
   if (loading) return <FullPageLoading />;
   if (!user) return <Navigate to="/sign-in" replace />;
+  if (!profile) return <ProfileRecovery />;
   if (needsEmailVerification(user, profile?.email_verified))
     return <Navigate to="/verify-email" replace />;
   if (profile?.onboarding_completed) return <Navigate to="/" replace />;
@@ -56,6 +58,7 @@ function OnboardingRoute() {
 function SignInRoute() {
   const { user, profile, loading } = useAuth();
   if (loading) return <FullPageLoading />;
+  if (user && !profile) return <ProfileRecovery />;
   if (user) {
     return (
       <Navigate
@@ -76,6 +79,7 @@ function VerificationRoute() {
   const { user, profile, loading } = useAuth();
   if (loading) return <FullPageLoading />;
   if (!user) return <Navigate to="/sign-in" replace />;
+  if (!profile) return <ProfileRecovery />;
   if (!needsEmailVerification(user, profile?.email_verified)) {
     return (
       <Navigate
@@ -94,26 +98,32 @@ function FullPageLoading() {
   );
 }
 export const router = createBrowserRouter([
-  { path: "/sign-in", element: <SignInRoute /> },
-  { path: "/demo", element: suspense(<Demo />) },
-  { path: "/forgot-password", element: suspense(<ForgotPassword />) },
-  { path: "/verify-email", element: <VerificationRoute /> },
-  { path: "/onboarding", element: <OnboardingRoute /> },
   {
-    element: <ProtectedShell />,
+    errorElement: <RouteError />,
     children: [
-      { index: true, element: suspense(<Dashboard />) },
-      { path: "transactions", element: suspense(<Transactions />) },
-      { path: "plan", element: suspense(<Planning />) },
-      { path: "reports", element: suspense(<Reports />) },
-      { path: "more", element: suspense(<More />) },
-      { path: "accounts", element: suspense(<Accounts />) },
-      { path: "assets", element: suspense(<Assets />) },
-      { path: "loans", element: suspense(<Loans />) },
-      { path: "categories", element: suspense(<Categories />) },
-      { path: "settings", element: suspense(<Settings />) },
-      { path: "profile", element: suspense(<Profile />) },
+      { path: "/sign-in", element: <SignInRoute /> },
+      { path: "/demo", element: suspense(<Demo />) },
+      { path: "/forgot-password", element: suspense(<ForgotPassword />) },
+      { path: "/verify-email", element: <VerificationRoute /> },
+      { path: "/onboarding", element: <OnboardingRoute /> },
+      {
+        element: <ProtectedShell />,
+        children: [
+          { index: true, element: suspense(<Dashboard />) },
+          { path: "transactions", element: suspense(<Transactions />) },
+          { path: "plan", element: suspense(<Planning />) },
+          { path: "reports", element: suspense(<Reports />) },
+          { path: "more", element: suspense(<More />) },
+          { path: "accounts", element: suspense(<Accounts />) },
+          { path: "assets", element: suspense(<Assets />) },
+          { path: "loans", element: suspense(<Loans />) },
+          { path: "assistant", element: suspense(<Assistant />) },
+          { path: "categories", element: suspense(<Categories />) },
+          { path: "settings", element: suspense(<Settings />) },
+          { path: "profile", element: suspense(<Profile />) },
+        ],
+      },
+      { path: "*", element: <Navigate to="/" replace /> },
     ],
   },
-  { path: "*", element: <Navigate to="/" replace /> },
 ]);

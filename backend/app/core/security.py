@@ -1,9 +1,4 @@
-"""Server-side crypto and identity-token verification.
-
-Spendova does not issue its own sessions: Firebase signs ID tokens and this
-module verifies them. One-time codes and reset tokens are stored only as keyed
-digests, and queued email payloads are sealed at rest.
-"""
+"""Shared identities, HMAC one-time codes and encrypted email payloads."""
 
 import base64
 import hashlib
@@ -12,15 +7,13 @@ import secrets
 from dataclasses import dataclass
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from google.auth.transport import requests as google_requests
-from google.oauth2 import id_token
 
 from app.core.config import get_settings
 
 
 @dataclass(frozen=True)
 class Identity:
-    """Who is calling, as proven by a Firebase ID token (or the local development header)."""
+    """Who is calling, as proven by a database session (or the test development header)."""
 
     id: str
     email: str | None = None
@@ -28,26 +21,6 @@ class Identity:
     photo_url: str | None = None
     email_verified: bool = False
     provider: str | None = None
-
-
-def verify_firebase_token(token: str) -> Identity:
-    """Raises ValueError when the token is invalid, expired, or for another project."""
-    claims = id_token.verify_firebase_token(
-        token, google_requests.Request(), audience=get_settings().firebase_project_id
-    )
-    if not claims:
-        raise ValueError("Empty token claims")
-    user_id = claims.get("sub") or claims.get("user_id")
-    if not user_id:
-        raise ValueError("Token has no user identity")
-    return Identity(
-        id=user_id,
-        email=claims.get("email"),
-        name=claims.get("name"),
-        photo_url=claims.get("picture"),
-        email_verified=bool(claims.get("email_verified")),
-        provider=(claims.get("firebase") or {}).get("sign_in_provider"),
-    )
 
 
 def one_time_code() -> str:

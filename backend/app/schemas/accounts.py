@@ -13,12 +13,12 @@ class AccountCreate(RequestModel):
     currency: CurrencyCode = "INR"
     opening_balance: Decimal = Decimal(0)
     institution: str | None = Field(default=None, max_length=100)
-    principal_amount: Decimal | None = Field(default=None, gt=0)
+    principal_amount: Decimal | None = Field(default=None, gt=0, max_digits=19, decimal_places=4)
     annual_interest_rate: Decimal | None = Field(default=None, ge=0, le=100)
     started_on: date | None = None
     maturity_on: date | None = None
     tenure_months: int | None = Field(default=None, ge=1, le=1200)
-    installment_amount: Decimal | None = Field(default=None, gt=0)
+    installment_amount: Decimal | None = Field(default=None, gt=0, max_digits=19, decimal_places=4)
 
     @model_validator(mode="after")
     def validate_financial_account(self) -> "AccountCreate":
@@ -30,7 +30,16 @@ class AccountCreate(RequestModel):
             raise ValueError("fixed deposit amount is required")
         if self.account_type == "recurring_deposit" and not self.installment_amount:
             raise ValueError("recurring deposit installment is required")
+        if self.started_on and self.maturity_on and self.maturity_on <= self.started_on:
+            raise ValueError("Maturity must be after the start date")
         return self
+
+
+class DepositProjectionRead(ApiModel):
+    contributed: Decimal
+    estimated_maturity: Decimal | None
+    estimated_interest: Decimal | None
+    basis: str
 
 
 class AccountRead(ApiModel):
@@ -48,3 +57,4 @@ class AccountRead(ApiModel):
     installment_amount: Decimal | None
     archived: bool
     current_balance: Decimal
+    deposit_projection: DepositProjectionRead | None = None

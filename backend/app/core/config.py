@@ -1,7 +1,8 @@
 from functools import lru_cache
 from typing import Annotated
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 # Placeholder for local development only; production refuses to start with it.
@@ -15,12 +16,18 @@ class Settings(BaseSettings):
     app_version: str = "0.8.0"
     environment: str = "development"
     database_url: str = "sqlite:///./spendova.db"
+    # Optional non-transaction-pooler connection used only by Alembic migrations.
+    direct_url: str | None = None
     cors_origins: Annotated[list[str], NoDecode] = ["http://localhost:5173"]
     auth_required: bool = False
-    firebase_project_id: str | None = None
-    # Firebase Admin credentials (service-account JSON as one line). Required to
-    # change passwords from the server; never expose it to the frontend.
-    firebase_service_account_json: str | None = None
+    jwt_access_secret: str = DEVELOPMENT_SECRET
+    access_token_ttl_minutes: int = Field(default=15, ge=1, le=60)
+    refresh_token_ttl_days: int = Field(default=30, ge=1, le=90)
+    refresh_cookie_name: str = "spendova_refresh"
+    enable_api_docs: bool = False
+    swagger_username: str | None = None
+    swagger_password: str | None = Field(default=None, repr=False)
+    swagger_session_ttl_minutes: int = Field(default=60, ge=5, le=480)
 
     # Email delivery. "console" prints messages locally; "smtp" delivers them.
     email_delivery_mode: str = "console"
@@ -56,11 +63,30 @@ class Settings(BaseSettings):
     # Vercel Cron sends "Authorization: Bearer <CRON_SECRET>" to the scheduled endpoints.
     cron_secret: str | None = None
 
+    openai_api_key: str | None = None
+    finance_assistant_model: str = "gpt-4.1-mini"
+    rate_limit_assistant_requests: int = 10
+    finance_assistant_daily_token_limit: int = Field(default=20000, ge=0, le=1000000)
+    finance_assistant_max_daily_tokens: int = Field(default=100000, ge=0, le=1000000)
+    finance_assistant_reset_timezone: str = "Asia/Kolkata"
+    reminders_enabled: bool = True
+    reminder_poll_seconds: int = Field(default=300, ge=30, le=86400)
+
     # Per-IP sliding-window limits (in-memory, per instance).
     rate_limit_enabled: bool = True
     rate_limit_window_seconds: int = 60
     rate_limit_global_requests: int = 300
     rate_limit_auth_requests: int = 10
+    rate_limit_refresh_requests: int = 120
+
+    @field_validator("finance_assistant_reset_timezone")
+    @classmethod
+    def valid_reset_timezone(cls, value: str) -> str:
+        try:
+            ZoneInfo(value)
+        except (ZoneInfoNotFoundError, ValueError) as exc:
+            raise ValueError("Use a valid IANA reset timezone") from exc
+        return value
 
     @property
     def is_production(self) -> bool:
@@ -78,7 +104,7 @@ class Settings(BaseSettings):
             return [origin.strip() for origin in value.split(",") if origin.strip()]
         return value
 
-    @field_validator("database_url", mode="before")
+    @field_validator("database_url", "direct_url", mode="before")
     @classmethod
     def select_psycopg_driver(cls, value: object) -> object:
         if isinstance(value, str) and value.startswith("postgresql://"):
@@ -88,14 +114,21 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def production_is_locked_down(self) -> "Settings":
         """Refuse to start an unsafe production server instead of failing open."""
+        if self.enable_api_docs:
+            if not self.swagger_username or not self.swagger_username.strip() or ":" in self.swagger_username:
+                raise ValueError("SWAGGER_USERNAME is required and must not contain a colon")
+            if (
+                not self.swagger_password
+                or not self.swagger_password.strip()
+                or not 16 <= len(self.swagger_password) <= 1024
+            ):
+                raise ValueError("SWAGGER_PASSWORD must be between 16 and 1024 characters")
         if not self.is_production:
             return self
         problems = []
         if not self.auth_required:
             problems.append("AUTH_REQUIRED must be true")
-        if not self.firebase_project_id:
-            problems.append("FIREBASE_PROJECT_ID is required")
-        for name in ("otp_secret", "data_encryption_key"):
+        for name in ("otp_secret", "data_encryption_key", "jwt_access_secret"):
             value = getattr(self, name)
             if value == DEVELOPMENT_SECRET or len(value) < 32:
                 problems.append(f"{name.upper()} must be a random value of at least 32 characters")

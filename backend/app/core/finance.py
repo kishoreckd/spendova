@@ -1,7 +1,7 @@
 import calendar
 from dataclasses import dataclass
 from datetime import date, timedelta
-from decimal import ROUND_CEILING, ROUND_HALF_UP, Decimal
+from decimal import ROUND_CEILING, ROUND_HALF_UP, Decimal, localcontext
 from enum import StrEnum
 
 MONEY = Decimal("0.01")
@@ -289,3 +289,67 @@ def installments_due_by(first_due_on: date, months: int, today: date) -> int:
     while count < months and add_months(first_due_on, count) <= today:
         count += 1
     return count
+
+
+def affordability(
+    income: Decimal,
+    spending: Decimal,
+    current_emi: Decimal,
+    goals: Decimal,
+    price: Decimal,
+    down_payment: Decimal,
+    months: int,
+    annual_rate: Decimal,
+) -> dict[str, str | int | None]:
+    """Historical spending includes paid EMIs; do not subtract them twice."""
+    if down_payment >= price:
+        raise ValueError("Down payment must be less than the purchase price")
+    principal = price - down_payment
+    emi = emi_for(principal, annual_rate, months)
+    schedule = amortization_schedule(principal, annual_rate, emi, months, date(2030, 1, 1))
+    total = sum((row.payment for row in schedule), Decimal(0))
+    headroom = income - spending - goals
+    return {
+        "principal": str(principal.quantize(MONEY, rounding=ROUND_HALF_UP)),
+        "new_emi": str(emi),
+        "total_repayment": str(total.quantize(MONEY, rounding=ROUND_HALF_UP)),
+        "interest": str((total - principal).quantize(MONEY, rounding=ROUND_HALF_UP)),
+        "total_outlay": str((total + down_payment).quantize(MONEY, rounding=ROUND_HALF_UP)),
+        "headroom_after_emi": str((headroom - emi).quantize(MONEY, rounding=ROUND_HALF_UP)),
+        "emi_to_income_percent": str(((current_emi + emi) * 100 / income).quantize(Decimal("0.1")))
+        if income > 0
+        else None,
+        "save_first_months": int((price / headroom).to_integral_value(rounding=ROUND_CEILING))
+        if headroom > 0
+        else None,
+    }
+
+
+def deposit_projection(
+    kind: str, principal: Decimal | None, installment: Decimal | None, annual_rate: Decimal | None, months: int | None
+) -> dict | None:
+    """Pre-tax estimate, monthly compounding. RD contributions at start of each month.
+    Rates and deposit terms come from the user; bank-specific rounding/tax is not modelled.
+    """
+    if kind not in {"fixed_deposit", "recurring_deposit"} or not months:
+        return None
+    with localcontext() as context:
+        context.prec = 128
+        contribution = (principal or Decimal(0)) if kind == "fixed_deposit" else (installment or Decimal(0)) * months
+        maturity = None
+        if annual_rate is not None:
+            rate = annual_rate / Decimal(1200)
+            if kind == "fixed_deposit":
+                maturity = contribution * (1 + rate) ** months
+            elif rate:
+                maturity = (installment or Decimal(0)) * (((1 + rate) ** months - 1) / rate) * (1 + rate)
+            else:
+                maturity = contribution
+        return {
+            "contributed": contribution.quantize(MONEY, rounding=ROUND_HALF_UP),
+            "estimated_maturity": maturity.quantize(MONEY, rounding=ROUND_HALF_UP) if maturity is not None else None,
+            "estimated_interest": (maturity - contribution).quantize(MONEY, rounding=ROUND_HALF_UP)
+            if maturity is not None
+            else None,
+            "basis": "Monthly compounding; RD instalments at month start; before taxes and bank adjustments",
+        }

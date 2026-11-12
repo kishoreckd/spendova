@@ -21,6 +21,12 @@ export type AccountItem = {
   maturity_on: string | null;
   tenure_months: number | null;
   installment_amount: string | null;
+  deposit_projection?: {
+    contributed: string;
+    estimated_maturity: string | null;
+    estimated_interest: string | null;
+    basis: string;
+  } | null;
   archived: boolean;
 };
 

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.constants.finance import TRANSACTION_STATUS_VOIDED
 from app.core.errors import AppError
+from app.core.finance import add_months, deposit_projection
 from app.db.models.account_model import Account
 from app.db.models.transaction_model import Transaction
 from app.schemas.accounts import AccountCreate, AccountRead
@@ -29,7 +30,19 @@ def current_balance(account: Account, transactions: list[Transaction]) -> Decima
 
 def to_read(account: Account, transactions: list[Transaction]) -> AccountRead:
     values = {column.name: getattr(account, column.name) for column in Account.__table__.columns}
-    return AccountRead.model_validate({**values, "current_balance": current_balance(account, transactions)})
+    return AccountRead.model_validate(
+        {
+            **values,
+            "current_balance": current_balance(account, transactions),
+            "deposit_projection": deposit_projection(
+                account.account_type,
+                account.principal_amount,
+                account.installment_amount,
+                account.annual_interest_rate,
+                account.tenure_months,
+            ),
+        }
+    )
 
 
 def touches_account(account: Account) -> ColumnElement[bool]:
@@ -73,6 +86,11 @@ def owned_accounts(db: Session, user_id: str, account_ids: list[str]) -> dict[st
 
 def create_account(db: Session, user_id: str, payload: AccountCreate) -> Account:
     account = Account(user_id=user_id, **payload.model_dump())
+    if account.account_type in {"fixed_deposit", "recurring_deposit"} and account.started_on and account.tenure_months:
+        try:
+            account.maturity_on = account.maturity_on or add_months(account.started_on, account.tenure_months)
+        except ValueError as exc:
+            raise AppError.bad_request("Deposit maturity is outside the supported date range") from exc
     db.add(account)
     db.flush()
     return account

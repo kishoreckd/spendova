@@ -56,3 +56,25 @@ Preview all templates, light and dark: `python scripts/preview_emails.py` → `a
 - Codes are 6 digits, stored only as HMAC digests (`OTP_SECRET`), with attempt limits and expiry.
 - Reset requests never reveal whether an account exists.
 - `/auth/verification/*` and `/auth/password-reset/*` use the stricter per-IP auth rate limit.
+
+## Opt-in financial reminders (2026-11-05)
+
+Settings persists preferences on the server. Bills/EMIs and planned contributions, FD/RD maturity,
+budget thresholds and weekly review emails are opt-in; old localStorage flags are not treated as
+consent. Only verified email profiles receive scheduled mail. No amounts, lender/account names
+or balances appear in these emails; links lead to the signed-in app.
+
+A local/Docker producer scans every REMINDER_POLL_SECONDS (default 300), alongside the outbox.
+On Vercel the existing protected `/cron/email-outbox` first queues reminders, then processes
+outbox retries. Its configured daily schedule runs 03:00 UTC (08:30 India); deployment needs
+CRON_SECRET. Daily scans are not exact-time reminders. No background loop is used on Vercel.
+REMINDERS_ENABLED disables the producer, without disabling security/verification email.
+
+Due events have 7-day, tomorrow, today and one overdue stage (up to 30 days overdue), deduplicated
+per user/entity/due-date/stage. A missed scan may miss an advance stage. Tracked loan reminders
+use their existing bill; untracked loans are scanned directly. FD/RD need a maturity date and must
+not be archived. Budget alerts fire once at 80% and 100% of the current base-currency monthly
+budget; weekly review links send on Mondays in the user's timezone. Archived/stopped entities
+are skipped by future scans. Already queued emails can still be retried until their one-day TTL.
+Receipt uniqueness and encrypted outbox insertion share one transaction. SMTP acceptance is not
+proof of inbox delivery; retries can duplicate a message after an ambiguous SMTP response.

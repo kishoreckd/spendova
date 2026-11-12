@@ -1,6 +1,8 @@
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
+frontend/test-results/
+frontend/playwright-report/
 backend/.venv/
 backend/__pycache__/
 backend/.pytest_cache/
@@ -8,6 +10,8 @@ backend/.pytest_cache/
 .env
 *.env.local
 backend/.env
+backend/.env.docs.local
+backend/.env.auth.local
 backend/*.db
 backend/.venv/
 **/__pycache__/

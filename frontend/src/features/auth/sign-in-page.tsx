@@ -33,7 +33,7 @@ export default function SignInPage() {
   const location = useLocation();
   const prefilledEmail =
     (location.state as { email?: string } | null)?.email ?? "";
-  const { signInWithEmail, signUpWithEmail, signInWithGoogle } = useAuth();
+  const { signInWithEmail, signUpWithEmail } = useAuth();
   const [mode, setMode] = useState<Mode>("sign-in");
   const [submitting, setSubmitting] = useState<"email" | "google" | null>(null);
   const [error, setError] = useState("");
@@ -90,36 +90,16 @@ export default function SignInPage() {
         navigate(destination(profile), { replace: true });
       }
     } catch (reason) {
-      const code = firebaseCode(reason);
-      if (code === "auth/email-already-in-use" || code === "auth/invalid-email")
-        setFieldErrors({ email: friendlyError(reason) });
-      else if (code === "auth/weak-password")
-        setFieldErrors({ password: friendlyError(reason) });
-      else setError(friendlyError(reason));
+      setError(reason instanceof Error ? reason.message : "Could not sign in");
     } finally {
       setSubmitting(null);
     }
   }
 
-  async function continueWithGoogle() {
-    setSubmitting("google");
-    setError("");
-    try {
-      const profile = await signInWithGoogle();
-      navigate(destination(profile), { replace: true });
-    } catch (reason) {
-      if (firebaseCode(reason) !== "auth/popup-closed-by-user")
-        setError(friendlyError(reason));
-    } finally {
-      setSubmitting(null);
-    }
-  }
-
-  function forgotPassword(event: FormEvent<HTMLButtonElement>) {
-    const form = event.currentTarget.form;
-    const email = String(
-      new FormData(form ?? undefined).get("email") ?? "",
-    ).trim();
+  function forgotPassword() {
+    const email =
+      (document.getElementById("email") as HTMLInputElement | null)?.value ??
+      "";
     navigate("/forgot-password", { state: { email } });
   }
 
@@ -139,7 +119,7 @@ export default function SignInPage() {
               Money with a plan
             </p>
             <h1 className="text-4xl font-semibold leading-tight xl:text-5xl">
-              See where your money goes—and where it can take you.
+              See where your money goesâ€”and where it can take you.
             </h1>
             <p className="mt-5 max-w-lg text-base leading-7 text-emerald-50/80">
               Track spending, plan meaningful purchases, and make confident
@@ -258,45 +238,13 @@ export default function SignInPage() {
                 >
                   {submitting === "email"
                     ? mode === "sign-in"
-                      ? "Signing in…"
-                      : "Creating account…"
+                      ? "Signing inâ€¦"
+                      : "Creating accountâ€¦"
                     : mode === "sign-in"
                       ? "Sign in"
                       : "Create account"}
                 </Button>
               </form>
-              <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                <span className="h-px flex-1 bg-border" />
-                <span>or</span>
-                <span className="h-px flex-1 bg-border" />
-              </div>
-              <Button
-                variant="outline"
-                className="h-11 w-full rounded-xl sm:h-11"
-                loading={submitting === "google"}
-                disabled={submitting === "email"}
-                onClick={continueWithGoogle}
-              >
-                <svg aria-hidden="true" viewBox="0 0 24 24" className="size-4">
-                  <path
-                    fill="#4285F4"
-                    d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.9h5.4a4.6 4.6 0 0 1-2 3v2.5h3.3c1.9-1.8 2.9-4.4 2.9-7.4Z"
-                  />
-                  <path
-                    fill="#34A853"
-                    d="M12 22c2.7 0 5-.9 6.7-2.4l-3.3-2.5c-.9.6-2.1 1-3.4 1-2.6 0-4.9-1.8-5.7-4.2H3v2.6A10 10 0 0 0 12 22Z"
-                  />
-                  <path
-                    fill="#FBBC05"
-                    d="M6.3 13.9A6 6 0 0 1 6 12c0-.7.1-1.3.3-1.9V7.5H3A10 10 0 0 0 2 12c0 1.6.4 3.1 1 4.5l3.3-2.6Z"
-                  />
-                  <path
-                    fill="#EA4335"
-                    d="M12 5.9c1.5 0 2.8.5 3.8 1.5l2.9-2.8A9.7 9.7 0 0 0 12 2a10 10 0 0 0-9 5.5l3.3 2.6C7.1 7.7 9.4 5.9 12 5.9Z"
-                  />
-                </svg>
-                Continue with Google
-              </Button>
               <Button
                 variant="ghost"
                 className="w-full"
@@ -310,25 +258,4 @@ export default function SignInPage() {
       </div>
     </main>
   );
-}
-
-function firebaseCode(reason: unknown) {
-  return typeof reason === "object" && reason && "code" in reason
-    ? String(reason.code)
-    : "";
-}
-
-function friendlyError(reason: unknown) {
-  const code = firebaseCode(reason);
-  if (code === "auth/email-already-in-use")
-    return "An account already exists for this email. Sign in instead.";
-  if (code === "auth/invalid-credential")
-    return "The email or password is incorrect.";
-  if (code === "auth/weak-password")
-    return "Choose a stronger password with at least 8 characters.";
-  if (code === "auth/operation-not-allowed")
-    return "Email sign-in is not enabled in Firebase yet.";
-  return reason instanceof Error
-    ? reason.message
-    : "Authentication could not be completed.";
 }

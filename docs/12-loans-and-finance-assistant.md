@@ -80,3 +80,61 @@ Spendova must remain fully usable with the assistant disabled.
 - An EMI payment is one expense; principal and interest are not yet split in the ledger.
 - Floating rates, part-prepayments, and moratoriums are not modelled yet (roadmap).
 - Processing fee is counted in the total cost but not posted as a transaction automatically.
+
+## Implemented finance assistant (2026-10-29)
+
+Open **More > Finance Assistant** (`/assistant`). Local summaries, repayment priorities,
+a purchase calculator and optional conversational AI are available.
+
+- `GET /api/v1/insights/snapshot`: signed-in user, user timezone, base currency. Income/spending
+  average the last three complete calendar months including zero months. Only cleared
+  income/expenses count. Transfers and other currencies are excluded.
+- Headroom = average income - average spending - planned goal savings. Spending already includes
+  recorded EMIs, so do not subtract them twice. Headroom is **not an affordability approval**:
+  new bills, unrecorded payments, investment transfers, emergency reserves and down-payment
+  liquidity are not inferred. Missing income history is flagged.
+- Purchase check calculates financed principal, EMI, interest, repayment, total outlay, headroom
+  after the new EMI, EMI/income percentage and save-first months using Decimal. Save-first assumes
+  saving all headroom from zero, constant prices and no returns. Processing fees are excluded.
+- `POST /api/v1/insights/chat`: `{question, history?, scenario?, use_ai?}`. Scenario is
+  `{price, down_payment, months, annual_rate}`. Amounts are decimal strings. History accepts up to
+  12 user/assistant turns. Reply: `{answer, mode, snapshot, calculation}` in the standard envelope.
+- AI uses the Responses API (`store=false`), at most two model calls and one validated read-only
+  `check_purchase` tool per question. The model explains server numbers. No writes or market tools.
+  Model text can still be wrong; the server calculation panel is authoritative.
+- Optional **backend Vercel** variables: `OPENAI_API_KEY`, `FINANCE_ASSISTANT_MODEL` (default
+  `gpt-4.1-mini`), `RATE_LIMIT_ASSISTANT_REQUESTS` (10 per IP/window per instance). Redeploy.
+  No key in the frontend or `VITE_*`; local features work without a key.
+- **Use AI** is explicit opt-in: sends question, recent chat and aggregate financial context to
+  OpenAI. Snapshot excludes email, merchant names, notes, account identifiers and loan names.
+  Questions can themselves contain personal data. `store=false` does not imply zero retention.
+- Chats stay in page memory and clear on new chat, navigation or reload. No schema migration.
+  Provider failures return generic 503 errors; retry or switch to local mode.
+- Remaining scope: budget trends, asset replacement, recurring commitment forecasts, prepayment
+  quotes, investment return projections and specific investment product selection.
+
+Integration references: [Responses](https://developers.openai.com/api/reference/cli/resources/responses/methods/create)
+and [function calling](https://developers.openai.com/api/docs/guides/function-calling).
+
+## Daily limits, deposit tool and Settings (2026-11-05)
+
+Settings > Finance assistant & email now controls the per-user daily allowance and four reminder
+opt-ins. Default 20,000 tokens/day; operator maximum 100,000. 0 pauses AI. Counter/reset details
+are server-derived and persist across sign-out, browser reloads, restarts and server instances.
+Midnight in FINANCE_ASSISTANT_RESET_TIMEZONE (default Asia/Kolkata) starts a new day without cron.
+Profile timezone changes cannot reset the AI day. Settings changes never clear prior charges.
+Tokens include every provider call. Before a call the server reserves a conservative allowance;
+reported total_tokens settles once. Missing usage or timeouts keep the reservation, so a large
+request can be rejected with positive remaining tokens. Local summaries/calculators remain usable.
+
+New operator settings: FINANCE_ASSISTANT_DAILY_TOKEN_LIMIT,
+FINANCE_ASSISTANT_MAX_DAILY_TOKENS and FINANCE_ASSISTANT_RESET_TIMEZONE. Runtime backend only.
+At most two model calls and one read-only calculation tool per question: check_purchase or
+project_deposit. FD/RD questions require explicit amount, annual rate, deposit type and tenure.
+The server performs Decimal maths and returns the calculation panel. Deposits recorded in Accounts
+also appear anonymously in the snapshot. Maturity/interest are estimates, not a bank quotation.
+Neither the agent nor scheduled jobs move money or connect to banks.
+
+Earlier sections listing notifications as future work are superseded by the implemented opt-in
+reminders in docs/11-email-delivery.md. Budget/asset conversational context and full cash-flow
+forecasts remain future enhancements. Live OpenAI calls still require a backend key and opt-in.

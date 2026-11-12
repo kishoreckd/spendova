@@ -1,9 +1,11 @@
+import { ImportPreviewDialog } from "./import-preview-dialog";
+import type { ImportPreview } from "./transaction-import";
+import { PreferencesCard } from "./preferences-card";
 import { useState } from "react";
 import {
   CalendarRange,
   ChevronRight,
   Download,
-  ExternalLink,
   FileSpreadsheet,
   LogOut,
   Monitor,
@@ -15,22 +17,15 @@ import {
 import { useTheme } from "next-themes";
 import { useNavigate } from "react-router-dom";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field } from "@/components/common/form-field";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/features/auth/auth-context";
 import { localDateISO } from "@/lib/format";
 import { notifyError, notifySuccess } from "@/lib/forms";
 
-type NotificationPreferences = {
-  bills: boolean;
-  budgets: boolean;
-  weekly: boolean;
-};
 type StatementPeriod = "1-month" | "3-months" | "6-months" | "custom";
 
 function monthsBefore(dateText: string, months: number) {
@@ -38,46 +33,21 @@ function monthsBefore(dateText: string, months: number) {
   date.setMonth(date.getMonth() - months);
   return date.toISOString().slice(0, 10);
 }
-const noPreferences: NotificationPreferences = {
-  bills: false,
-  budgets: false,
-  weekly: false,
-};
-
 export default function SettingsPage() {
   const { profile, signOut } = useAuth();
   const navigate = useNavigate();
   const { theme = "system", setTheme } = useTheme();
-  const preferenceKey = `spendova-notifications:${profile?.id ?? "anonymous"}`;
-  const [preferences, setPreferences] = useState<NotificationPreferences>(
-    () => {
-      try {
-        return (
-          JSON.parse(localStorage.getItem(preferenceKey) || "null") ??
-          noPreferences
-        );
-      } catch {
-        return noPreferences;
-      }
-    },
-  );
   const [busy, setBusy] = useState<
     "excel" | "template" | "import" | "signout" | null
   >(null);
+  const [importPreview, setImportPreview] = useState<{
+    preview: ImportPreview;
+    batchId: string;
+  } | null>(null);
   const [statementPeriod, setStatementPeriod] =
     useState<StatementPeriod>("3-months");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState(localDateISO());
-
-  function setPreference(key: keyof NotificationPreferences, enabled: boolean) {
-    const next = { ...preferences, [key]: enabled };
-    setPreferences(next);
-    try {
-      localStorage.setItem(preferenceKey, JSON.stringify(next));
-    } catch {
-      // Private browsing can block storage; the switch still reflects the choice.
-    }
-  }
 
   async function exportExcel() {
     if (!profile) return;
@@ -147,22 +117,13 @@ export default function SettingsPage() {
   async function importTransactions(file: File) {
     setBusy("import");
     try {
-      const { importTransactionTemplate } =
-        await import("@/features/settings/transaction-import");
-      const result = await importTransactionTemplate(file);
-      if (result.rejected.length) {
-        notifyError(
-          new Error(
-            `${result.rejected.slice(0, 3).join("; ")}${result.rejected.length > 3 ? `; and ${result.rejected.length - 3} more` : ""}`,
-          ),
-          `${result.rejected.length} rows need correction`,
-        );
-        return;
-      }
-      notifySuccess(
-        "Data imported successfully",
-        `${result.imported.toLocaleString()} transactions added`,
-      );
+      const { prepareTransactionImport, importBatchId } =
+        await import("./transaction-import");
+      const preview = await prepareTransactionImport(file);
+      setImportPreview({
+        preview,
+        batchId: await importBatchId(preview.entries),
+      });
     } catch (reason) {
       notifyError(reason, "Import failed");
     } finally {
@@ -208,7 +169,7 @@ export default function SettingsPage() {
                 {profile?.display_name ?? "Your profile"}
               </p>
               <p className="truncate text-sm text-muted-foreground">
-                {profile?.email} · {profile?.base_currency}
+                {profile?.email} Â· {profile?.base_currency}
               </p>
             </div>
             <ChevronRight className="size-5 text-muted-foreground" />
@@ -291,7 +252,7 @@ export default function SettingsPage() {
               onClick={() => void exportExcel()}
             >
               <FileSpreadsheet />
-              {busy === "excel" ? "Preparing…" : "Download Excel statement"}
+              {busy === "excel" ? "Preparingâ€¦" : "Download Excel statement"}
             </Button>
           </div>
         </CardContent>
@@ -331,38 +292,21 @@ export default function SettingsPage() {
             />
             {busy === "import" && (
               <p className="mt-2 text-sm text-muted-foreground">
-                Validating and importing…
+                Validatingâ€¦
               </p>
             )}
           </div>
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between gap-2">
-            <CardTitle>Notifications</CardTitle>
-            <Badge variant="secondary">Coming soon</Badge>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-1">
-          <NotificationRow
-            label="Bill reminders"
-            checked={preferences.bills}
-            onCheckedChange={(value) => setPreference("bills", value)}
-          />
-          <NotificationRow
-            label="Budget alerts"
-            checked={preferences.budgets}
-            onCheckedChange={(value) => setPreference("budgets", value)}
-          />
-          <NotificationRow
-            label="Weekly summary"
-            checked={preferences.weekly}
-            onCheckedChange={(value) => setPreference("weekly", value)}
-          />
-        </CardContent>
-      </Card>
+      {importPreview && (
+        <ImportPreviewDialog
+          key={importPreview.batchId}
+          {...importPreview}
+          onClose={() => setImportPreview(null)}
+        />
+      )}
+      <PreferencesCard />
 
       <Card>
         <CardHeader>
@@ -373,16 +317,11 @@ export default function SettingsPage() {
             variant="outline"
             className="w-full justify-start"
             onClick={() =>
-              window.open(
-                "https://myaccount.google.com/security",
-                "_blank",
-                "noopener,noreferrer",
-              )
+              navigate("/forgot-password", { state: { email: profile?.email } })
             }
           >
             <ShieldCheck />
-            Google account security
-            <ExternalLink className="ml-auto size-4" />
+            Change password
           </Button>
           <Button
             variant="destructive"
@@ -396,22 +335,5 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
     </div>
-  );
-}
-
-function NotificationRow({
-  label,
-  checked,
-  onCheckedChange,
-}: {
-  label: string;
-  checked: boolean;
-  onCheckedChange: (value: boolean) => void;
-}) {
-  return (
-    <label className="flex min-h-11 cursor-pointer items-center justify-between gap-4 text-sm">
-      <span>{label}</span>
-      <Switch checked={checked} onCheckedChange={onCheckedChange} />
-    </label>
   );
 }

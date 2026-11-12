@@ -359,7 +359,7 @@ Display definitions in tooltips/help so numbers are trustworthy.
 
 ## 10. Security and privacy baseline
 
-- Verify Firebase ID tokens on every protected API request.
+- Verify Spendova access tokens and their live database sessions on every protected API request.
 - Apply per-user row ownership in application code and database policies where possible.
 - Encrypt transport and managed storage; keep secrets outside source control.
 - Use signed, expiring URLs for private attachments.

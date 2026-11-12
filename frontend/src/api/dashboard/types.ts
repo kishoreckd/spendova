@@ -13,6 +13,7 @@ export type DashboardSummary = {
 };
 
 export type DashboardQuery = {
+  currency?: string;
   year?: number;
   month?: number;
   accountId?: string;

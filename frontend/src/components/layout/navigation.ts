@@ -1,5 +1,6 @@
 import {
   BarChart3,
+  Bot,
   CreditCard,
   Home,
   Landmark,
@@ -18,6 +19,7 @@ export const primaryNav = [
   { to: "/more", label: "More", icon: MoreHorizontal },
 ];
 export const manageNav = [
+  { to: "/assistant", label: "Finance Assistant", icon: Bot },
   { to: "/accounts", label: "Accounts", icon: WalletCards },
   { to: "/loans", label: "Loans & EMIs", icon: Landmark },
   { to: "/categories", label: "Categories", icon: Tags },
@@ -37,6 +39,7 @@ export const pageTitles: Record<string, string> = {
   "/reports": "Reports",
   "/more": "More",
   "/accounts": "Accounts",
+  "/assistant": "Finance Assistant",
   "/loans": "Loans & EMIs",
   "/categories": "Categories",
   "/assets": "Assets",

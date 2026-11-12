@@ -12,6 +12,8 @@ export function buildAnalysis(
   transactions: TransactionItem[],
   today: Date,
   monthCount: number,
+  categoryNames: ReadonlyMap<string, string> = new Map(),
+  currency?: string,
 ) {
   const months = Array.from({ length: monthCount }, (_, index) => {
     const date = new Date(
@@ -30,14 +32,17 @@ export function buildAnalysis(
     };
   });
   const monthMap = new Map(months.map((item) => [item.key, item]));
-  const categories = new Map<string, number>();
+  const categories = new Map<string, { name: string; amount: number }>();
   const daily = new Map<number, number>();
   const currentKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
   const previous = new Date(today.getFullYear(), today.getMonth() - 1, 1);
   const previousKey = `${previous.getFullYear()}-${String(previous.getMonth() + 1).padStart(2, "0")}`;
 
   transactions
-    .filter((item) => item.status === "cleared")
+    .filter(
+      (item) =>
+        item.status === "cleared" && (!currency || item.currency === currency),
+    )
     .forEach((item) => {
       const month = item.occurred_on.slice(0, 7);
       const amount = Number(item.amount);
@@ -45,15 +50,21 @@ export function buildAnalysis(
       if (bucket && item.kind === "income") bucket.income += amount;
       if (bucket && item.kind === "expense") bucket.spending += amount;
       if (month === currentKey && item.kind === "expense") {
-        const category = item.destination || "Uncategorized";
-        categories.set(category, (categories.get(category) ?? 0) + amount);
+        const category = item.category_id
+          ? (categoryNames.get(item.category_id) ?? "Archived category")
+          : "Uncategorized";
+        const key = item.category_id ?? "uncategorized";
+        categories.set(key, {
+          name: category,
+          amount: (categories.get(key)?.amount ?? 0) + amount,
+        });
         const day = Number(item.occurred_on.slice(8, 10));
         daily.set(day, (daily.get(day) ?? 0) + amount);
       }
     });
-  const categoryList = [...categories]
-    .map(([name, amount]) => ({ name, amount }))
-    .sort((a, b) => b.amount - a.amount);
+  const categoryList = [...categories.values()].sort(
+    (a, b) => b.amount - a.amount,
+  );
   const dailyList = Array.from({ length: today.getDate() }, (_, index) => ({
     day: index + 1,
     amount: daily.get(index + 1) ?? 0,

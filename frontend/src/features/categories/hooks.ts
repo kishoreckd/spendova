@@ -30,10 +30,12 @@ const invalidate = () =>
   queryClient.invalidateQueries({ queryKey: queryKeys.categories });
 
 /** The user's active categories, shared by every open screen through the query cache. */
-export function useCategories(enabled = true) {
+export function useCategories(enabled = true, includeArchived = false) {
   const query = useQuery({
-    queryKey: queryKeys.categories,
-    queryFn: categoriesApi.list,
+    queryKey: includeArchived
+      ? [...queryKeys.categories, "history"]
+      : queryKeys.categories,
+    queryFn: ({ signal }) => categoriesApi.list(signal, includeArchived),
     enabled,
   });
   const items = query.data ?? [];

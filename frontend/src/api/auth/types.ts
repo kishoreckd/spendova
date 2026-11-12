@@ -11,6 +11,13 @@ export type SpendovaUser = {
   email_verified: boolean;
 };
 
+export type LoginResponse = {
+  access_token: string;
+  expires_in_seconds: number;
+  account: SpendovaUser;
+  development_code: string | null;
+};
+
 export type ProfileUpdate = Partial<
   Pick<
     SpendovaUser,

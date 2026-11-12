@@ -34,3 +34,19 @@ Done:
 ## Later
 
 Multi-currency transfers, household sharing, bank feeds, row-level security in PostgreSQL.
+
+### Finance assistant first release
+
+- [x] User-scoped snapshot, local summaries and loan repayment priorities.
+- [x] Optional AI chat with read-only purchase calculation tool.
+- [x] EMI and save-first purchase comparison.
+- [ ] Budget/asset context and full recurring commitment forecast.
+
+### FD/RD, reminders and assistant allowance (2026-11-05)
+
+- [x] Authoritative Decimal FD/RD maturity and interest projections with deposit start dates.
+- [x] Agent deposit projection tool and deposit snapshot context.
+- [x] Persistent Settings preferences and per-user daily AI cap with automatic midnight reset.
+- [x] Atomic reservations and idempotent provider-usage settlement across instances.
+- [x] Opt-in bills/EMI, maturity, budget threshold and weekly review emails through the outbox.
+- [x] Existing cron runs reminder production before retrying outbox delivery.

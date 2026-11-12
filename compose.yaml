@@ -1,39 +1,84 @@
+# Local development stack. Production remains on Vercel.
 services:
   db:
     image: postgres:17-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_DB: spendova
       POSTGRES_USER: spendova
       POSTGRES_PASSWORD: spendova_dev
     volumes:
       - spendova_db:/var/lib/postgresql/data
-    ports: ["5432:5432"]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U spendova"]
+      test: ["CMD-SHELL", "pg_isready -U spendova -d spendova"]
       interval: 5s
       timeout: 3s
-      retries: 10
+      retries: 15
 
-  # Local mail catcher: the backend sends real SMTP here; read it at http://127.0.0.1:8026.
   mailpit:
     image: axllent/mailpit:latest
+    restart: unless-stopped
     ports:
-      - "${MAILPIT_UI_PORT:-8026}:8025" # web inbox
-      - "${MAILPIT_SMTP_PORT:-1026}:1025" # SMTP
+      - "127.0.0.1:${MAILPIT_UI_PORT:-8026}:8025"
+      - "127.0.0.1:${MAILPIT_SMTP_PORT:-1026}:1025"
 
   api:
     build: ./backend
-    ports: ["8000:8000"]
+    restart: unless-stopped
+    env_file:
+      - path: ./backend/.env
+        required: false
+      - path: ./backend/.env.docs.local
+        required: false
+      - path: ./backend/.env.auth.local
+        required: false
+    ports:
+      - "127.0.0.1:8000:8000"
     environment:
+      ENVIRONMENT: development
+      VERCEL: "false"
+      AUTH_REQUIRED: "true"
       DATABASE_URL: postgresql+psycopg://spendova:spendova_dev@db:5432/spendova
+      APP_URL: http://localhost:5173
+      CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
       EMAIL_DELIVERY_MODE: smtp
+      EMAIL_OUTBOX_WORKER_ENABLED: "true"
       SMTP_HOST: mailpit
       SMTP_PORT: "1025"
       SMTP_USE_TLS: "false"
+      SMTP_USERNAME: ""
+      SMTP_PASSWORD: ""
       EMAIL_FROM: Spendova <no-reply@spendova.local>
+    command: ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000"]
     depends_on:
       db: {condition: service_healthy}
       mailpit: {condition: service_started}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"]
+      interval: 10s
+      timeout: 6s
+      start_period: 30s
+      retries: 6
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    env_file:
+      - path: ./frontend/.env.local
+        required: false
+    environment:
+      VITE_API_BASE_PATH: /api/v1
+      BACKEND_URL: http://api:8000
+    ports:
+      - "127.0.0.1:5173:5173"
+    depends_on:
+      api: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5173').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      start_period: 15s
+      retries: 6
 
 volumes:
   spendova_db:

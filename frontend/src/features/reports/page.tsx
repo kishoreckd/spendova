@@ -1,3 +1,4 @@
+import { Metric, Legend, Signal } from "./report-metrics";
 import { useMemo, useState } from "react";
 import {
   ArrowDownRight,
@@ -28,6 +29,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FormAlert } from "@/components/common/form-field";
 import { useMoney } from "@/hooks/use-money";
 import { useDashboard } from "@/features/dashboard/hooks";
+import { useCategories } from "@/features/categories/hooks";
+import { CurrencyPicker } from "@/components/common/currency-picker";
+import { formatMoney } from "@/lib/format";
 import { useAllTransactions } from "@/features/transactions/hooks";
 import { errorMessage } from "@/lib/forms";
 import { buildAnalysis, compactNumber } from "./report-analysis";
@@ -42,25 +46,53 @@ const chartColors = [
 
 export default function ReportsPage() {
   const currency = useMoney();
+  const [selectedCurrency, setSelectedCurrency] = useState(currency.currency);
+  const categoriesQuery = useCategories(true, true);
   const [range, setRange] = useState<3 | 6 | 12>(6);
   const [today] = useState(() => new Date());
-  const money = (value: number) => currency.format(value, 0);
-  const summaryQuery = useDashboard(today.getFullYear(), today.getMonth() + 1);
+  const money = (value: number) =>
+    formatMoney(value, selectedCurrency, currency.locale, 0);
+  const summaryQuery = useDashboard(
+    today.getFullYear(),
+    today.getMonth() + 1,
+    undefined,
+    selectedCurrency,
+  );
   const transactionsQuery = useAllTransactions();
   const summary = summaryQuery.data;
   const transactions = useMemo(
     () => transactionsQuery.data ?? [],
     [transactionsQuery.data],
   );
-  const loading = summaryQuery.isPending || transactionsQuery.isPending;
+  const loading =
+    summaryQuery.isPending ||
+    transactionsQuery.isPending ||
+    categoriesQuery.loading;
   const failure = summaryQuery.error ?? transactionsQuery.error;
-  const error = failure ? errorMessage(failure, "Could not load reports") : "";
+  const error = failure
+    ? errorMessage(failure, "Could not load reports")
+    : categoriesQuery.error;
   const load = () =>
-    Promise.all([summaryQuery.refetch(), transactionsQuery.refetch()]);
+    Promise.all([
+      summaryQuery.refetch(),
+      transactionsQuery.refetch(),
+      categoriesQuery.reload(),
+    ]);
 
+  const categoryNames = useMemo(
+    () => new Map(categoriesQuery.items.map((item) => [item.id, item.name])),
+    [categoriesQuery.items],
+  );
   const analysis = useMemo(
-    () => buildAnalysis(transactions, today, range),
-    [transactions, today, range],
+    () =>
+      buildAnalysis(
+        transactions,
+        today,
+        range,
+        categoryNames,
+        selectedCurrency,
+      ),
+    [transactions, today, range, categoryNames, selectedCurrency],
   );
   if (loading)
     return (
@@ -108,7 +140,12 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-end">
+      <div className="flex flex-wrap justify-end gap-3">
+        <CurrencyPicker
+          value={selectedCurrency}
+          currencies={transactions.map((item) => item.currency)}
+          onChange={setSelectedCurrency}
+        />
         <div
           className="flex rounded-xl bg-muted p-1"
           role="group"
@@ -335,72 +372,6 @@ export default function ReportsPage() {
             />
           </CardContent>
         </Card>
-      </div>
-    </div>
-  );
-}
-
-function Metric({
-  icon: Icon,
-  label,
-  value,
-  detail,
-  tone,
-}: {
-  icon: typeof Wallet;
-  label: string;
-  value: string;
-  detail?: string;
-  tone?: "positive" | "negative";
-}) {
-  return (
-    <Card>
-      <CardContent className="p-4 sm:p-5">
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-sm text-muted-foreground">{label}</p>
-          <span className="rounded-xl bg-muted p-1.5 sm:p-2">
-            <Icon className="size-4" />
-          </span>
-        </div>
-        <p
-          className={`money mt-2 truncate text-xl font-semibold sm:mt-3 sm:text-2xl ${tone === "positive" ? "text-emerald-600" : tone === "negative" ? "text-rose-600" : ""}`}
-        >
-          {value}
-        </p>
-        {detail && (
-          <p className="mt-1 truncate text-xs text-muted-foreground">
-            {detail}
-          </p>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-function Legend({ color, label }: { color: string; label: string }) {
-  return (
-    <span className="flex items-center gap-2">
-      <i className="size-2.5 rounded-sm" style={{ background: color }} />
-      {label}
-    </span>
-  );
-}
-function Signal({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: typeof Wallet;
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="flex items-center gap-3 rounded-xl border p-3">
-      <span className="rounded-lg bg-muted p-2">
-        <Icon className="size-4" />
-      </span>
-      <div>
-        <p className="text-xs text-muted-foreground">{label}</p>
-        <p className="money font-medium">{value}</p>
       </div>
     </div>
   );

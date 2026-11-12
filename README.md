@@ -44,3 +44,51 @@ runs the API with PostgreSQL.
 10. [Decisions](docs/10-decisions.md)
 11. [Email delivery](docs/11-email-delivery.md)
 12. [Loans, EMIs, and the finance assistant](docs/12-loans-and-finance-assistant.md)
+
+## Run locally with Docker
+
+With Docker Desktop running, from the repository root:
+
+```powershell
+docker compose up -d --build --wait
+```
+
+- App: http://localhost:5173
+- Swagger: http://localhost:8000/docs
+- Health: http://localhost:8000/health
+- Local mail inbox: http://localhost:8026
+
+Compose runs the Vite development frontend, FastAPI, PostgreSQL and Mailpit. It applies
+Alembic migrations before the API starts. The database is private to the Docker network and
+persists in the `spendova_db` volume. Existing non-Docker database records are not copied.
+All published ports bind to localhost. Production deployment remains on Vercel.
+
+The frontend receives public Firebase settings from `frontend/.env.local`. The backend receives
+runtime settings from `backend/.env`; neither file is copied into an image. Compose overrides
+the database, local URLs and SMTP delivery so this stack uses its own database and Mailpit.
+Firebase authentication is enabled; sign in with your existing Firebase account. The local
+profile is created in the Docker database. Optional AI uses the backend runtime key if configured.
+
+```powershell
+docker compose ps
+docker compose stop
+docker compose up -d --wait
+```
+
+Rebuild with `docker compose up -d --build --wait` after source changes. `docker compose down`
+removes containers while retaining database data. Avoid `docker compose down -v` unless you
+intend to permanently delete the local Docker database. Do not run the native frontend/backend
+on ports 5173/8000 at the same time as this stack.
+
+## Finance assistant and reminder settings
+
+Settings > Finance assistant & email saves the daily AI token allowance and opt-in reminder
+preferences. Defaults: 20,000 tokens per user/day; 0 pauses AI. The allowance renews at midnight
+Asia/Kolkata and is shared across devices/instances. Ambiguous failed calls can retain a token
+reservation. Backend OPENAI_API_KEY enables AI; local summaries and calculations work without it.
+
+FD/RD accounts show server-calculated maturity and interest estimates; the assistant has FD/RD
+and purchase/EMI calculation tools. All estimates use explicit user terms. For scheduled email,
+enable the desired preferences: bills/EMIs, deposit maturity, budget thresholds or weekly review.
+Docker delivers to Mailpit. Vercel's protected mail cron runs reminders and retries via Brevo.
+See docs/11-email-delivery.md and docs/12-loans-and-finance-assistant.md for assumptions and setup.

@@ -1,4 +1,4 @@
-"""User database mapping. The primary key is the Firebase UID."""
+"""User mapping. Existing identifiers are preserved; new users receive UUIDs."""
 
 from datetime import datetime
 

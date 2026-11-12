@@ -9,7 +9,7 @@ const invalidate = () =>
 export function useAssets(enabled = true) {
   return useQuery({
     queryKey: queryKeys.assets,
-    queryFn: assetsApi.list,
+    queryFn: ({ signal }) => assetsApi.list(signal),
     enabled,
   });
 }

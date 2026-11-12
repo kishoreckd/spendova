@@ -342,3 +342,28 @@ No single age threshold forces replacement. Safety-critical answers can raise ur
 - OCR totals that disagree with extracted line items;
 - missing exchange rates and stale investment valuations.
 
+
+## Assistant purchase comparison
+
+Headroom = three-full-month average cleared income - average cleared expense - active goal
+monthly savings. Transfers and non-base currencies are excluded. Recorded EMIs are already in
+expense. This is historical headroom, not a complete commitment forecast or safe-to-buy amount.
+Financed principal = price - down payment. New EMI uses the reducing-balance schedule. Total
+outlay = scheduled payments + down payment; interest = payments - financed principal. Save-first
+months = ceiling(price/headroom) when positive, from zero savings, no returns and constant price.
+
+## FD/RD projections and daily AI allowance
+
+Backend `deposit_projection` is authoritative. FD maturity = P * (1+r)^n; RD maturity =
+I * (((1+r)^n - 1)/r) * (1+r), where r = annual percentage / 1200. RD contributions are at
+month start. At zero rate FD = principal and RD = monthly instalment * months. Use Decimal,
+round HALF_UP to two decimal places at the boundary. Estimates assume monthly compounding,
+exclude tax, penalties and bank-specific rules, and never alter account balances. Missing rates
+produce no maturity estimate. Start + tenure derives maturity with month-end clamping.
+
+AI usage includes input and output from each provider call, including a tool follow-up. A
+conservative UTF-8 request byte allowance plus protocol margin and output maximum is charged
+atomically before each call. Known provider total_tokens settles/refunds the excess once.
+Ambiguous timeouts and missing usage retain their reservation. This can reject a request before
+the displayed remaining tokens reach zero. The allowance is a token guard, not a monetary cap.
+The next Asia/Kolkata calendar day gets a new allowance; changing preferences does not erase usage.

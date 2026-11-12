@@ -1,4 +1,5 @@
 from datetime import date
+from typing import Literal
 
 from fastapi import APIRouter, Header, Query, Request, Response
 
@@ -20,8 +21,14 @@ def list_transactions(
     account_id: str | None = None,
     limit: int = Query(default=100, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
+    search: str | None = Query(default=None, max_length=200),
+    kind: Literal["expense", "income", "transfer"] | None = None,
+    status: Literal["cleared", "pending", "voided"] | None = None,
+    currency: str | None = Query(default=None, pattern=r"^[A-Z]{3}$"),
 ):
-    filters = service.TransactionFilters(from_date, to_date, category_id, account_id, limit, offset)
+    filters = service.TransactionFilters(
+        from_date, to_date, category_id, account_id, limit, offset, search, kind, status, currency
+    )
     return service.list_transactions(db, auth.id, filters)
 
 

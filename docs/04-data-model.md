@@ -1,6 +1,6 @@
 # Database Schema
 
-> Sections 1–18 describe the **target** model. What exists today is listed first.
+> Sections 1â€“18 describe the **target** model. What exists today is listed first.
 
 ## 0. Implemented schema (migration head `20261028_0014`)
 
@@ -604,3 +604,19 @@ The posting service and database constraints must ensure:
 - OCR raw-result retention duration.
 - Whether reporting aggregates begin as SQL views or application queries before materialization.
 
+
+## 2026-11-05: preferences, quota and reminder receipts
+
+Migration `20261105_0015` adds user-owned `preferences`, `ai_daily_usage`, `ai_charges`, and
+`reminder_receipts`. Daily usage has composite PK (user_id, day). Charges persist conservative
+reservations and idempotent settlements. Reminder receipts are unique by (user_id, event_key);
+the receipt and encrypted outbox entry commit together. All user FKs cascade on deletion.
+Account deposit terms already existed; projections are derived, never stored as balances.
+
+## Local authentication ? migration 20261111_0016
+
+`password_credentials`: user_id primary/FK (cascade), scrypt password_hash, failed_logins,
+locked_until. `user_sessions`: UUID id, indexed user_id FK (cascade), unique indexed SHA-256
+refresh_digest, expires_at, created_at, user_agent. Existing users and all financial foreign keys
+remain unchanged. Password reset can add local credentials to an existing account after code
+verification and revokes its sessions.

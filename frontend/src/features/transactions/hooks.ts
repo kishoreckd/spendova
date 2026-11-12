@@ -12,7 +12,7 @@ export function useTransactions(
 ) {
   return useQuery({
     queryKey: queryKeys.transactions(filters),
-    queryFn: () => transactionsApi.list(filters),
+    queryFn: ({ signal }) => transactionsApi.list(filters, signal),
     enabled,
     placeholderData: keepPreviousData,
   });
@@ -22,7 +22,14 @@ export function useTransactions(
 export function useAllTransactions() {
   return useQuery({
     queryKey: queryKeys.allTransactions,
-    queryFn: () => transactionsApi.listAll(),
+    queryFn: ({ signal }) => transactionsApi.listAll({}, signal),
+  });
+}
+
+export function useVoidTransaction() {
+  return useMutation({
+    mutationFn: transactionsApi.void,
+    onSuccess: invalidateLedger,
   });
 }
 

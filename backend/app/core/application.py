@@ -14,13 +14,17 @@ from app.api.categories import router as categories_router
 from app.api.dashboard import router as dashboard_router
 from app.api.goals import router as goals_router
 from app.api.health import router as health_router
+from app.api.insights import router as insights_router
 from app.api.loans import router as loans_router
 from app.api.password_reset import router as password_reset_router
+from app.api.preferences import router as preferences_router
 from app.api.recurring import router as recurring_router
 from app.api.transactions import router as transactions_router
 from app.constants.http import API_PREFIX, DOCS_PATHS
 from app.core.config import get_settings
+from app.core.docs import install_docs
 from app.core.errors import register_error_handlers
+from app.core.openapi import install_openapi
 from app.core.rate_limit import global_limit
 from app.utils.validation.json_validator import ApiJSONResponse
 
@@ -28,7 +32,7 @@ from app.utils.validation.json_validator import ApiJSONResponse
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     """Alembic owns the schema (run `alembic upgrade head`); this only starts background work."""
-    from app.services import email_outbox_service
+    from app.services import email_outbox_service, reminder_service
 
     settings = get_settings()
     stop = asyncio.Event()
@@ -37,6 +41,8 @@ async def lifespan(_: FastAPI):
     # (GET /cron/email-outbox). Elsewhere the first pass resends anything pending after a restart.
     if settings.email_outbox_worker_enabled and not settings.vercel:
         tasks.append(asyncio.create_task(email_outbox_service.run_loop(stop)))
+    if settings.reminders_enabled and not settings.vercel:
+        tasks.append(asyncio.create_task(reminder_service.run_loop(stop)))
     try:
         yield
     finally:
@@ -51,9 +57,9 @@ def create_app() -> FastAPI:
         version=settings.app_version,
         default_response_class=ApiJSONResponse,
         lifespan=lifespan,
-        docs_url=None if settings.is_production else "/docs",
-        redoc_url=None if settings.is_production else "/redoc",
-        openapi_url=None if settings.is_production else "/openapi.json",
+        docs_url=None,
+        redoc_url=None,
+        openapi_url=None,
         dependencies=[Depends(global_limit)],
     )
     app.add_middleware(
@@ -93,7 +99,11 @@ def create_app() -> FastAPI:
         assets_router,
         loans_router,
         dashboard_router,
+        insights_router,
+        preferences_router,
         audit_router,
     ):
         app.include_router(router, prefix=API_PREFIX)
+    install_openapi(app)
+    install_docs(app, settings)
     return app

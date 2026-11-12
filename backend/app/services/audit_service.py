@@ -10,6 +10,10 @@ from app.db.models.audit_log_model import AuditLog
 
 class AuditAction(StrEnum):
     USER_SIGN_UP = "USER_SIGN_UP"
+    USER_LOGIN = "USER_LOGIN"
+    USER_LOGIN_FAILED = "USER_LOGIN_FAILED"
+    USER_LOGOUT = "USER_LOGOUT"
+    PREFERENCES_UPDATE = "PREFERENCES_UPDATE"
     PROFILE_UPDATE = "PROFILE_UPDATE"
     EMAIL_VERIFIED = "EMAIL_VERIFIED"
     PASSWORD_RESET_REQUEST = "PASSWORD_RESET_REQUEST"  # noqa: S105 - action name, not a secret

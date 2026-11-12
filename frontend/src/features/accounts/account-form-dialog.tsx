@@ -1,3 +1,4 @@
+import { DatePicker } from "@/components/common/date-picker";
 import { useEffect, useState } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -23,6 +24,7 @@ import {
   optionalMoney,
   requiredText,
 } from "@/lib/forms";
+import { localDateISO } from "@/lib/format";
 import { accountTypes, owesMoney } from "./account-types";
 import { useCreateAccount } from "./hooks";
 
@@ -33,6 +35,7 @@ const schema = z
     balance: optionalMoney({ allowZero: true }),
     institution: z.string().trim().max(100, "Keep this under 100 characters"),
     principal: optionalMoney(),
+    startedOn: z.string().min(1, "Choose a start date"),
     interestRate: z.string().trim(),
     tenureMonths: z.string().trim(),
     installment: optionalMoney(),
@@ -66,6 +69,7 @@ const emptyValues: Values = {
   balance: "",
   institution: "",
   principal: "",
+  startedOn: localDateISO(),
   interestRate: "",
   tenureMonths: "",
   installment: "",
@@ -80,6 +84,7 @@ const serverFields = {
   annual_interest_rate: "interestRate",
   tenure_months: "tenureMonths",
   installment_amount: "installment",
+  started_on: "startedOn",
 } as const;
 
 export function AccountFormDialog({
@@ -101,7 +106,7 @@ export function AccountFormDialog({
   const type = useWatch({ control: form.control, name: "type" });
 
   useEffect(() => {
-    if (open) form.reset(emptyValues);
+    if (open) form.reset({ ...emptyValues, startedOn: localDateISO() });
   }, [open, form]);
 
   function changeOpen(next: boolean) {
@@ -123,6 +128,9 @@ export function AccountFormDialog({
             ? `-${entered}`
             : entered,
         institution: parsed.institution || null,
+        started_on: ["fixed_deposit", "recurring_deposit"].includes(parsed.type)
+          ? parsed.startedOn
+          : null,
         principal_amount: parsed.principal || null,
         annual_interest_rate: parsed.interestRate || null,
         tenure_months: parsed.tenureMonths ? Number(parsed.tenureMonths) : null,
@@ -226,6 +234,27 @@ export function AccountFormDialog({
                   placeholder={type === "loan" ? "e.g. HDFC Bank" : "e.g. SBI"}
                 />
               </Field>
+              {["fixed_deposit", "recurring_deposit"].includes(type) && (
+                <Field
+                  id="deposit-start"
+                  label="Start date"
+                  error={errors.startedOn?.message}
+                >
+                  <Controller
+                    control={form.control}
+                    name="startedOn"
+                    render={({ field }) => (
+                      <DatePicker
+                        id="deposit-start"
+                        value={field.value}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        invalid={!!errors.startedOn}
+                      />
+                    )}
+                  />
+                </Field>
+              )}
               <div className="grid gap-4 min-[420px]:grid-cols-2">
                 {type === "recurring_deposit" ? (
                   <Field

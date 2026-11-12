@@ -2,7 +2,7 @@
 # Vercel has no pre-deploy hook for the Python API, so this runs alongside each deploy.
 #
 # One-time setup: GitHub repo → Settings → Secrets and variables → Actions → New repository secret
-#   PRODUCTION_DATABASE_URL = the Supabase session-pooler URL (port 5432), the same database the
+#   PRODUCTION_DIRECT_URL = the Supabase session-pooler URL (port 5432), the same database the
 #   Vercel backend uses. Migrations need a session connection, not the 6543 transaction pooler.
 #
 # Migrations must stay backward compatible (add tables/columns first, remove later), because the new
@@ -49,16 +49,17 @@ jobs:
 
       - name: Check the database secret is configured
         env:
-          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.PRODUCTION_DIRECT_URL }}
         run: |
-          if [ -z "$DATABASE_URL" ]; then
-            echo "::error::Add the PRODUCTION_DATABASE_URL repository secret first."
+          if [ -z "$DIRECT_URL" ]; then
+            echo "::error::Add the PRODUCTION_DIRECT_URL repository secret first."
             exit 1
           fi
 
       - name: Apply migrations
         env:
-          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.PRODUCTION_DIRECT_URL }}
+          DATABASE_URL: ${{ secrets.PRODUCTION_DIRECT_URL }}
           # Only so the app settings load; migrations don't send email or verify users.
           ENVIRONMENT: development
           EMAIL_DELIVERY_MODE: console

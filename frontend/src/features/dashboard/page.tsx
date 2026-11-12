@@ -3,6 +3,8 @@ import { useOutletContext } from "react-router-dom";
 import { FormAlert } from "@/components/common/form-field";
 import { LoadingScreen } from "@/components/common/loading-screen";
 import type { ShellContext } from "@/components/layout/app-shell";
+import { CurrencyPicker } from "@/components/common/currency-picker";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -23,6 +25,7 @@ import { useDashboard } from "./hooks";
 export default function DashboardPage() {
   const { openTransaction } = useOutletContext<ShellContext>();
   const { profile } = useAuth();
+  const [currency, setCurrency] = useState(profile?.base_currency ?? "INR");
   const [month, setMonth] = useState(() => localDateISO().slice(0, 7));
   const [account, setAccount] = useState("all");
   const accountId = account === "all" ? undefined : account;
@@ -38,9 +41,18 @@ export default function DashboardPage() {
   }, [month]);
 
   const accounts = useAccounts().data ?? [];
-  const summaryQuery = useDashboard(period.year, period.month, accountId);
+  const selectedAccount = accounts.find((item) => item.id === account);
+  const displayCurrency = selectedAccount?.currency ?? currency;
+  const summaryQuery = useDashboard(
+    period.year,
+    period.month,
+    accountId,
+    displayCurrency,
+  );
   const recentQuery = useTransactions({
     limit: 5,
+    status: "cleared",
+    currency: displayCurrency,
     from: period.from,
     to: period.to,
     accountId,
@@ -66,16 +78,23 @@ export default function DashboardPage() {
   const error = summaryQuery.error ?? recentQuery.error;
   if (error)
     return (
-      <FormAlert>
-        {errorMessage(error, "Could not load your overview")}
-      </FormAlert>
+      <div className="space-y-3">
+        <FormAlert>
+          {errorMessage(error, "Could not load your overview")}
+        </FormAlert>
+        <Button
+          variant="outline"
+          onClick={() =>
+            void Promise.all([summaryQuery.refetch(), recentQuery.refetch()])
+          }
+        >
+          Try again
+        </Button>
+      </div>
     );
   const summary = summaryQuery.data;
   if (!summary) return <LoadingScreen />;
 
-  const selectedAccount = accounts.find((item) => item.id === account);
-  const displayCurrency =
-    selectedAccount?.currency ?? profile?.base_currency ?? "INR";
   const isCurrentMonth = month === localDateISO().slice(0, 7);
   const periodLabel = new Intl.DateTimeFormat(profile?.locale || undefined, {
     month: "long",
@@ -121,6 +140,13 @@ export default function DashboardPage() {
           </Select>
         </label>
       </div>
+      {!accountId && (
+        <CurrencyPicker
+          value={currency}
+          currencies={accounts.map((item) => item.currency)}
+          onChange={setCurrency}
+        />
+      )}
       {isCurrentMonth && !accountId && <LoansDueCard />}
       <DashboardContent
         income={Number(summary.income)}

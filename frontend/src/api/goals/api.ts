@@ -7,7 +7,7 @@ import type {
 } from "./types";
 
 export const goalsApi = {
-  list: () => apiFetch<GoalItem[]>("/goals"),
+  list: (signal?: AbortSignal) => apiFetch<GoalItem[]>("/goals", { signal }),
   create: (body: GoalCreate) =>
     apiFetch<GoalItem>("/goals", { method: "POST", body }),
   remove: (id: string) => apiFetch<void>(`/goals/${id}`, { method: "DELETE" }),

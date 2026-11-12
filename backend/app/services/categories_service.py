@@ -29,15 +29,12 @@ def ensure_default_categories(db: Session, user_id: str) -> None:
         pass  # A concurrent request seeded them first.
 
 
-def list_categories(db: Session, user_id: str) -> list[Category]:
+def list_categories(db: Session, user_id: str, include_archived: bool = False) -> list[Category]:
     ensure_default_categories(db, user_id)
-    return list(
-        db.scalars(
-            select(Category)
-            .where(Category.user_id == user_id, Category.archived.is_(False))
-            .order_by(Category.category_type, Category.name)
-        ).all()
-    )
+    query = select(Category).where(Category.user_id == user_id)
+    if not include_archived:
+        query = query.where(Category.archived.is_(False))
+    return list(db.scalars(query.order_by(Category.category_type, Category.name)).all())
 
 
 def get_owned_category(db: Session, user_id: str, category_id: str) -> Category:

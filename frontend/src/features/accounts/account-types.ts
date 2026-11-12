@@ -46,27 +46,7 @@ export function accountBalance(account: AccountItem) {
   return Number(account.current_balance ?? account.opening_balance ?? 0);
 }
 
-/** Estimated value at maturity for fixed and recurring deposits (monthly compounding). */
+/** Authoritative pre-tax estimate from the backend. */
 export function projectedDepositValue(account: AccountItem) {
-  const months = account.tenure_months ?? 0;
-  const monthlyRate = Number(account.annual_interest_rate ?? 0) / 1200;
-  if (!months) return null;
-  if (account.account_type === "fixed_deposit" && account.principal_amount) {
-    const principal = Number(account.principal_amount);
-    return monthlyRate > 0
-      ? principal * Math.pow(1 + monthlyRate, months)
-      : principal;
-  }
-  if (
-    account.account_type === "recurring_deposit" &&
-    account.installment_amount
-  ) {
-    const installment = Number(account.installment_amount);
-    return monthlyRate > 0
-      ? installment *
-          (((Math.pow(1 + monthlyRate, months) - 1) / monthlyRate) *
-            (1 + monthlyRate))
-      : installment * months;
-  }
-  return null;
+  return account.deposit_projection?.estimated_maturity ?? null;
 }
