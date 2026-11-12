@@ -11,6 +11,7 @@ import {
   Target,
   WalletCards,
 } from "lucide-react";
+import { financeAssistantEnabled } from "@/config/features";
 export const primaryNav = [
   { to: "/", label: "Overview", icon: Home },
   { to: "/transactions", label: "Transactions", icon: CreditCard },
@@ -19,7 +20,9 @@ export const primaryNav = [
   { to: "/more", label: "More", icon: MoreHorizontal },
 ];
 export const manageNav = [
-  { to: "/assistant", label: "Finance Assistant", icon: Bot },
+  ...(financeAssistantEnabled
+    ? [{ to: "/assistant", label: "Finance Assistant", icon: Bot }]
+    : []),
   { to: "/accounts", label: "Accounts", icon: WalletCards },
   { to: "/loans", label: "Loans & EMIs", icon: Landmark },
   { to: "/categories", label: "Categories", icon: Tags },
@@ -39,7 +42,7 @@ export const pageTitles: Record<string, string> = {
   "/reports": "Reports",
   "/more": "More",
   "/accounts": "Accounts",
-  "/assistant": "Finance Assistant",
+  ...(financeAssistantEnabled ? { "/assistant": "Finance Assistant" } : {}),
   "/loans": "Loans & EMIs",
   "/categories": "Categories",
   "/assets": "Assets",

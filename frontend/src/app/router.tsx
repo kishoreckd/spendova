@@ -6,6 +6,7 @@ import { LoadingScreen } from "@/components/common/loading-screen";
 import { ProfileRecovery } from "@/features/auth/profile-recovery";
 import { RouteError } from "@/components/common/route-error";
 import { useAuth } from "@/features/auth/auth-context";
+import { financeAssistantEnabled } from "@/config/features";
 const Dashboard = lazy(() => import("@/features/dashboard/page"));
 const Demo = lazy(() => import("@/features/dashboard/demo-page"));
 const Reports = lazy(() => import("@/features/reports/page"));
@@ -117,7 +118,9 @@ export const router = createBrowserRouter([
           { path: "accounts", element: suspense(<Accounts />) },
           { path: "assets", element: suspense(<Assets />) },
           { path: "loans", element: suspense(<Loans />) },
-          { path: "assistant", element: suspense(<Assistant />) },
+          ...(financeAssistantEnabled
+            ? [{ path: "assistant", element: suspense(<Assistant />) }]
+            : []),
           { path: "categories", element: suspense(<Categories />) },
           { path: "settings", element: suspense(<Settings />) },
           { path: "profile", element: suspense(<Profile />) },

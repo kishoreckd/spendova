@@ -24,6 +24,7 @@ environment-variable settings for production:
 ```text
 VITE_API_BASE_PATH=/api/v1
 BACKEND_URL=http://127.0.0.1:8000
+VITE_FINANCE_ASSISTANT_ENABLED=true
 ```
 
 Passwords are verified by the Spendova API against scrypt hashes in PostgreSQL. Access tokens
@@ -40,6 +41,7 @@ Deploy this repository to Vercel. For Vercel:
 - Output directory: `dist`
 - `BACKEND_URL`: `https://<your-backend-project>.vercel.app`
 - `VITE_API_BASE_PATH`: `/api/v1`
+- `VITE_FINANCE_ASSISTANT_ENABLED`: `true` to show the assistant, `false` to remove its navigation and route
 
 `vercel.ts` validates the backend origin, proxies same-origin `/api` requests, adds security
 headers, and provides the SPA fallback required for routes such as `/reports` and `/settings`.
