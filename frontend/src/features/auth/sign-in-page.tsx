@@ -54,6 +54,11 @@ export default function SignInPage() {
   }
 
   function destination(profile: { onboarding_completed: boolean }) {
+    if (
+      (location.state as { fromPasswordReset?: boolean } | null)
+        ?.fromPasswordReset
+    )
+      return "/profile";
     return profile.onboarding_completed ? "/" : "/onboarding";
   }
 

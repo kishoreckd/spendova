@@ -194,3 +194,27 @@ def complete_challenge(db: Session, token: str, method: str, code: str) -> tuple
         return user, False
     db.delete(challenge)
     return user, True
+
+
+def verify_password_recovery_factor(db: Session, user: User, method: str, code: str) -> bool:
+    """Verify a pre-enrolled non-email factor without creating a login session."""
+    row = enabled_for(db, user.id)
+    if not row:
+        return False
+    if method == "totp":
+        if row.method != "totp" or not row.totp_secret:
+            return False
+        counter = totp.matching_counter(unseal(row.totp_secret), code)
+        if counter is None or (row.totp_last_counter is not None and counter <= row.totp_last_counter):
+            return False
+        row.totp_last_counter = counter
+        return True
+    if method == "recovery":
+        digest = code_digest(user.id, totp.normalize_recovery_code(code), RECOVERY_PURPOSE)
+        remaining = list(row.recovery_hashes or [])
+        if digest not in remaining:
+            return False
+        remaining.remove(digest)
+        row.recovery_hashes = remaining
+        return True
+    return False

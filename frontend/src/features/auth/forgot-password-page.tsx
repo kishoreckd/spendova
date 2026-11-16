@@ -17,6 +17,7 @@ import { authApi } from "@/api/auth/api";
 import { controlProps, errorMessage, notifySuccess } from "@/lib/forms";
 
 type Step = "email" | "code" | "password";
+type RecoveryMethod = "email" | "totp" | "recovery";
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function passwordProblem(password: string) {
@@ -37,6 +38,7 @@ export default function ForgotPasswordPage() {
     (location.state as { email?: string } | null)?.email ?? "",
   );
   const [code, setCode] = useState("");
+  const [method, setMethod] = useState<RecoveryMethod>("email");
   const [resetToken, setResetToken] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -77,6 +79,7 @@ export default function ForgotPasswordPage() {
     setFormError("");
     try {
       const result = await authApi.requestPasswordReset(clean);
+      setMethod("email");
       setDevelopmentCode(result.development_code);
       setResendIn(result.resend_after_seconds);
       setCode("");
@@ -91,17 +94,44 @@ export default function ForgotPasswordPage() {
     }
   }
 
+  function chooseSecurityMethod(next: "totp" | "recovery") {
+    const clean = email.trim();
+    if (!EMAIL_PATTERN.test(clean)) {
+      setFieldErrors({ email: "Enter a valid email first" });
+      focus("reset-email");
+      return;
+    }
+    setMethod(next);
+    setCode("");
+    setFieldErrors({});
+    setFormError("");
+    setStep("code");
+    focus("reset-code");
+  }
+
   async function verify(event: FormEvent) {
     event.preventDefault();
-    if (!/^\d{6}$/.test(code)) {
+    if (method !== "recovery" && !/^\d{6}$/.test(code)) {
       setFieldErrors({ code: "Enter the 6-digit code" });
+      focus("reset-code");
+      return;
+    }
+    if (method === "recovery" && code.trim().length < 6) {
+      setFieldErrors({ code: "Enter a saved backup code" });
       focus("reset-code");
       return;
     }
     setBusy("verify");
     setFormError("");
     try {
-      const result = await authApi.verifyPasswordReset(email.trim(), code);
+      const result =
+        method === "email"
+          ? await authApi.verifyPasswordReset(email.trim(), code)
+          : await authApi.verifyPasswordResetFactor(
+              email.trim(),
+              method,
+              code.trim(),
+            );
       setResetToken(result.reset_token);
       setFieldErrors({});
       setStep("password");
@@ -132,7 +162,10 @@ export default function ForgotPasswordPage() {
     try {
       const result = await authApi.completePasswordReset(resetToken, password);
       notifySuccess("Password updated", "Sign in with your new password.");
-      navigate("/sign-in", { replace: true, state: { email: result.email } });
+      navigate("/sign-in", {
+        replace: true,
+        state: { email: result.email, fromPasswordReset: true },
+      });
     } catch (reason) {
       setFormError(
         errorMessage(reason, "Could not update your password. Try again."),
@@ -145,8 +178,13 @@ export default function ForgotPasswordPage() {
   const heading = {
     email: { icon: KeyRound, title: "Forgot password", description: "" },
     code: {
-      icon: MailCheck,
-      title: "Check your inbox",
+      icon: method === "email" ? MailCheck : ShieldCheck,
+      title:
+        method === "email"
+          ? "Check your inbox"
+          : method === "totp"
+            ? "Use your authenticator"
+            : "Use a backup code",
       description: email.trim(),
     },
     password: {
@@ -219,6 +257,27 @@ export default function ForgotPasswordPage() {
               >
                 {busy === "send" ? "Sending…" : "Send code"}
               </Button>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="rounded-xl"
+                  onClick={() => chooseSecurityMethod("totp")}
+                >
+                  Authenticator
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="rounded-xl"
+                  onClick={() => chooseSecurityMethod("recovery")}
+                >
+                  Backup code
+                </Button>
+              </div>
+              <p className="text-center text-xs text-muted-foreground">
+                These options work only if you enabled them earlier.
+              </p>
             </form>
           )}
 
@@ -236,14 +295,18 @@ export default function ForgotPasswordPage() {
               >
                 <Input
                   {...controlProps("reset-code", fieldErrors.code)}
-                  inputMode="numeric"
+                  inputMode={method === "recovery" ? "text" : "numeric"}
                   autoComplete="one-time-code"
-                  maxLength={6}
-                  placeholder="000000"
+                  maxLength={method === "recovery" ? 32 : 6}
+                  placeholder={method === "recovery" ? "xxxxx-xxxxx" : "000000"}
                   value={code}
                   className="h-14 rounded-2xl text-center font-mono text-2xl tracking-[0.55em] sm:h-14"
                   onChange={(event) => {
-                    setCode(event.target.value.replace(/\D/g, ""));
+                    setCode(
+                      method === "recovery"
+                        ? event.target.value
+                        : event.target.value.replace(/\D/g, ""),
+                    );
                     setFieldErrors({});
                   }}
                 />
@@ -257,19 +320,21 @@ export default function ForgotPasswordPage() {
                 {busy === "verify" ? "Checking…" : "Verify code"}
               </Button>
               <div className="flex flex-col-reverse gap-1 min-[380px]:flex-row min-[380px]:justify-between">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="rounded-xl"
-                  onClick={() => {
-                    setStep("email");
-                    setFieldErrors({});
-                    setFormError("");
-                    focus("reset-email");
-                  }}
-                >
-                  Change email
-                </Button>
+                {method === "email" && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="rounded-xl"
+                    onClick={() => {
+                      setStep("email");
+                      setFieldErrors({});
+                      setFormError("");
+                      focus("reset-email");
+                    }}
+                  >
+                    Change email
+                  </Button>
+                )}
                 <Button
                   type="button"
                   variant="ghost"

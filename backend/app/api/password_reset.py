@@ -6,6 +6,7 @@ from app.core.rate_limit import auth_limit
 from app.schemas.password_reset import (
     PasswordResetComplete,
     PasswordResetCompleted,
+    PasswordResetFactorVerify,
     PasswordResetRequest,
     PasswordResetRequested,
     PasswordResetVerified,
@@ -40,6 +41,17 @@ def verify_password_reset_code(payload: PasswordResetVerify, db: DbSession):
         result = service.verify_code(db, payload.email, payload.code)
     except AppError:
         db.commit()  # Keep the attempt count and expired-code cleanup.
+        raise
+    db.commit()
+    return result
+
+
+@router.post("/verify-factor", response_model=PasswordResetVerified)
+def verify_password_reset_factor(payload: PasswordResetFactorVerify, db: DbSession):
+    try:
+        result = service.verify_factor(db, payload.email, payload.method, payload.code)
+    except AppError:
+        db.commit()
         raise
     db.commit()
     return result

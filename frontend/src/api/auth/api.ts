@@ -88,6 +88,15 @@ export const authApi = {
       method: "POST",
       body: { email, code },
     }),
+  verifyPasswordResetFactor: (
+    email: string,
+    method: "totp" | "recovery",
+    code: string,
+  ) =>
+    apiFetch<PasswordResetVerified>("/auth/password-reset/verify-factor", {
+      method: "POST",
+      body: { email, method, code },
+    }),
   completePasswordReset: (resetToken: string, newPassword: string) =>
     apiFetch<{ email: string }>("/auth/password-reset/complete", {
       method: "POST",

@@ -25,6 +25,7 @@ from app.db.models.password_reset_code_model import PasswordResetCode
 from app.db.models.user_model import User
 from app.schemas.password_reset import PasswordResetRequested, PasswordResetVerified
 from app.services import notifications_service as notify
+from app.services import two_factor_service
 from app.services.auth_service import find_user_by_email
 from app.services.identity_service import IdentityError, IdentityProvider
 
@@ -35,6 +36,33 @@ MAX_ATTEMPTS = 5
 PURPOSE = "reset-password"
 INVALID_CODE = "That code is incorrect or has expired"
 SESSION_EXPIRED = "This reset session has expired. Start again."
+
+
+def _issue_reset_token(db: Session, user: User) -> PasswordResetVerified:
+    settings = get_settings()
+    now = utcnow()
+    token = random_token()
+    record = db.get(PasswordResetCode, user.id)
+    if record:
+        record.code_digest = ""
+        record.code_expires_at = now
+        record.attempts = 0
+        record.token_digest = sha256_hex(token)
+        record.token_expires_at = now + timedelta(minutes=settings.password_reset_token_minutes)
+        record.created_at = now
+    else:
+        db.add(
+            PasswordResetCode(
+                user_id=user.id,
+                code_digest="",
+                code_expires_at=now,
+                attempts=0,
+                token_digest=sha256_hex(token),
+                token_expires_at=now + timedelta(minutes=settings.password_reset_token_minutes),
+                created_at=now,
+            )
+        )
+    return PasswordResetVerified(reset_token=token, expires_in_seconds=settings.password_reset_token_minutes * 60)
 
 
 def request_reset(
@@ -85,7 +113,6 @@ def request_reset(
 
 def verify_code(db: Session, email: str, code: str) -> PasswordResetVerified:
     """Wrong attempts are counted even though the call fails; the router commits either way."""
-    settings = get_settings()
     user = find_user_by_email(db, email)
     record = db.get(PasswordResetCode, user.id) if user else None
     now = utcnow()
@@ -103,11 +130,14 @@ def verify_code(db: Session, email: str, code: str) -> PasswordResetVerified:
             raise AppError.rate_limited("Too many attempts. Request a new code.")
         raise AppError.bad_request(f"Incorrect code. {left} attempt{'s' if left != 1 else ''} left.")
 
-    token = random_token()
-    record.code_digest = ""
-    record.token_digest = sha256_hex(token)
-    record.token_expires_at = now + timedelta(minutes=settings.password_reset_token_minutes)
-    return PasswordResetVerified(reset_token=token, expires_in_seconds=settings.password_reset_token_minutes * 60)
+    return _issue_reset_token(db, user)
+
+
+def verify_factor(db: Session, email: str, method: str, code: str) -> PasswordResetVerified:
+    user = find_user_by_email(db, email)
+    if not user or not two_factor_service.verify_password_recovery_factor(db, user, method, code):
+        raise AppError.bad_request(INVALID_CODE)
+    return _issue_reset_token(db, user)
 
 
 def complete_reset(

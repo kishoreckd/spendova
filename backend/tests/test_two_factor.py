@@ -44,6 +44,18 @@ def test_authenticator_setup_sign_in_replay_and_backup_code(api, mailbox, monkey
         "recovery_codes_left": 8,
     }
 
+    reset = api.post(
+        f"{API}/auth/password-reset/verify-factor",
+        json={"email": EMAIL, "method": "recovery", "code": backup[1]},
+    )
+    assert reset.status_code == 200
+    assert len(data(reset)["reset_token"]) >= 20
+    reused = api.post(
+        f"{API}/auth/password-reset/verify-factor",
+        json={"email": EMAIL, "method": "recovery", "code": backup[1]},
+    )
+    assert reused.status_code == 400
+
     challenge = login(api)
     assert challenge["two_factor_required"] is True and "access_token" not in challenge
     code = totp.code_at(setup["secret"], int(now // 30))

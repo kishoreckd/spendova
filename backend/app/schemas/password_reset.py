@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import Field, model_validator
 
 from app.core.schema import ApiModel, Email, OneTimeCode, RequestModel
@@ -19,6 +21,12 @@ class PasswordResetRequested(ApiModel):
 class PasswordResetVerify(RequestModel):
     email: Email
     code: OneTimeCode
+
+
+class PasswordResetFactorVerify(RequestModel):
+    email: Email
+    method: Literal["totp", "recovery"]
+    code: str = Field(min_length=6, max_length=32)
 
 
 class PasswordResetVerified(ApiModel):
