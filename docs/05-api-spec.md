@@ -16,6 +16,14 @@ need a Spendova access token; data routes also need a verified email when auth i
 | GET / PATCH | `/auth/me` | Read or update profile (currency, locale, time zone, onboarding) |
 | POST | `/auth/verification/send` | Email a 6-digit verification code (rate limited) |
 | POST | `/auth/verification/confirm` | Confirm the code, marks the email verified |
+| POST | `/auth/login` | Session, or `{two_factor_required, challenge_token, method}` when two-step sign-in is on (no cookie yet) |
+| POST | `/auth/login/2fa` | `{challenge_token, method: totp\|email\|recovery, code}` → session; 5 attempts per challenge |
+| POST | `/auth/login/2fa/resend` | Re-send the emailed sign-in code (1/minute) |
+| GET | `/auth/2fa` | `{enabled, method, recovery_codes_left}` |
+| POST | `/auth/2fa/totp/setup` | `{secret, otpauth_uri}` for the authenticator QR code |
+| POST | `/auth/2fa/totp/enable` | `{code}` → 8 single-use backup codes (shown once) |
+| POST | `/auth/2fa/email/enable` | Needs a verified email → 8 backup codes |
+| POST | `/auth/2fa/disable` | `{password}`; 204 |
 | POST | `/auth/logout` | 204; the client signs out of Firebase |
 | POST | `/auth/password-reset/request` | Email a reset code (no account enumeration) |
 | POST | `/auth/password-reset/verify` | Exchange email + code for a short-lived reset token |

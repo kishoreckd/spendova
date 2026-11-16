@@ -40,6 +40,11 @@ def verify_email(db: Session, background: BackgroundTasks, user: User, code: str
     )
 
 
+def sign_in_code(db: Session, background: BackgroundTasks, user: User, code: str, minutes: int) -> None:
+    content = email_templates.sign_in_code_email(user.display_name, code, minutes)
+    _queue(db, background, user.email, content, CATEGORY_SECURITY, timedelta(minutes=minutes))
+
+
 def forgot_password(db: Session, background: BackgroundTasks, user: User, code: str) -> None:
     ttl = timedelta(minutes=get_settings().password_reset_code_minutes)
     _queue(

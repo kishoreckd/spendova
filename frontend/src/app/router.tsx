@@ -13,6 +13,7 @@ const Reports = lazy(() => import("@/features/reports/page"));
 const SignIn = lazy(() => import("@/features/auth/sign-in-page"));
 const Onboarding = lazy(() => import("@/features/auth/onboarding-page"));
 const VerifyEmail = lazy(() => import("@/features/auth/verify-email-page"));
+const SecureAccount = lazy(() => import("@/features/auth/secure-account-page"));
 const ForgotPassword = lazy(
   () => import("@/features/auth/forgot-password-page"),
 );
@@ -29,19 +30,11 @@ const Profile = lazy(() => import("@/features/profile/page"));
 const suspense = (node: React.ReactNode) => (
   <Suspense fallback={<LoadingScreen />}>{node}</Suspense>
 );
-function needsEmailVerification(
-  user: ReturnType<typeof useAuth>["user"],
-  verified: boolean | undefined,
-) {
-  return !!user && !verified;
-}
 function ProtectedShell() {
   const { user, profile, loading } = useAuth();
   if (loading) return <FullPageLoading />;
   if (!user) return <Navigate to="/sign-in" replace />;
   if (!profile) return <ProfileRecovery />;
-  if (needsEmailVerification(user, profile?.email_verified))
-    return <Navigate to="/verify-email" replace />;
   if (!profile?.onboarding_completed)
     return <Navigate to="/onboarding" replace />;
   return <AppShell />;
@@ -51,8 +44,6 @@ function OnboardingRoute() {
   if (loading) return <FullPageLoading />;
   if (!user) return <Navigate to="/sign-in" replace />;
   if (!profile) return <ProfileRecovery />;
-  if (needsEmailVerification(user, profile?.email_verified))
-    return <Navigate to="/verify-email" replace />;
   if (profile?.onboarding_completed) return <Navigate to="/" replace />;
   return suspense(<Onboarding />);
 }
@@ -61,15 +52,11 @@ function SignInRoute() {
   if (loading) return <FullPageLoading />;
   if (user && !profile) return <ProfileRecovery />;
   if (user) {
+    if (!profile?.email_verified)
+      return <Navigate to="/verify-email" replace />;
     return (
       <Navigate
-        to={
-          needsEmailVerification(user, profile?.email_verified)
-            ? "/verify-email"
-            : profile?.onboarding_completed
-              ? "/"
-              : "/onboarding"
-        }
+        to={profile?.onboarding_completed ? "/" : "/onboarding"}
         replace
       />
     );
@@ -81,7 +68,7 @@ function VerificationRoute() {
   if (loading) return <FullPageLoading />;
   if (!user) return <Navigate to="/sign-in" replace />;
   if (!profile) return <ProfileRecovery />;
-  if (!needsEmailVerification(user, profile?.email_verified)) {
+  if (profile.email_verified) {
     return (
       <Navigate
         to={profile?.onboarding_completed ? "/" : "/onboarding"}
@@ -90,6 +77,13 @@ function VerificationRoute() {
     );
   }
   return suspense(<VerifyEmail />);
+}
+function SecureAccountRoute() {
+  const { user, profile, loading } = useAuth();
+  if (loading) return <FullPageLoading />;
+  if (!user) return <Navigate to="/sign-in" replace />;
+  if (!profile) return <ProfileRecovery />;
+  return suspense(<SecureAccount />);
 }
 function FullPageLoading() {
   return (
@@ -106,6 +100,7 @@ export const router = createBrowserRouter([
       { path: "/demo", element: suspense(<Demo />) },
       { path: "/forgot-password", element: suspense(<ForgotPassword />) },
       { path: "/verify-email", element: <VerificationRoute /> },
+      { path: "/secure-account", element: <SecureAccountRoute /> },
       { path: "/onboarding", element: <OnboardingRoute /> },
       {
         element: <ProtectedShell />,

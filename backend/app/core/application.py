@@ -20,6 +20,7 @@ from app.api.password_reset import router as password_reset_router
 from app.api.preferences import router as preferences_router
 from app.api.recurring import router as recurring_router
 from app.api.transactions import router as transactions_router
+from app.api.two_factor import router as two_factor_router
 from app.constants.http import API_PREFIX, DOCS_PATHS
 from app.core.config import get_settings
 from app.core.docs import install_docs
@@ -89,6 +90,7 @@ def create_app() -> FastAPI:
     app.include_router(health_router)
     for router in (
         auth_router,
+        two_factor_router,
         password_reset_router,
         accounts_router,
         categories_router,

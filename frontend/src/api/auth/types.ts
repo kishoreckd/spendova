@@ -18,6 +18,30 @@ export type LoginResponse = {
   development_code: string | null;
 };
 
+export type TwoFactorMethod = "totp" | "email";
+export type SignInMethod = TwoFactorMethod | "recovery";
+
+export type TwoFactorChallenge = {
+  two_factor_required: true;
+  challenge_token: string;
+  method: TwoFactorMethod;
+  expires_in_seconds: number;
+  development_code: string | null;
+};
+
+export type TwoFactorStatus = {
+  enabled: boolean;
+  method: TwoFactorMethod | null;
+  recovery_codes_left: number;
+};
+
+export type TotpSetup = { secret: string; otpauth_uri: string };
+export type RecoveryCodes = { recovery_codes: string[] };
+export type TwoFactorCodeSent = {
+  sent: boolean;
+  development_code: string | null;
+};
+
 export type ProfileUpdate = Partial<
   Pick<
     SpendovaUser,

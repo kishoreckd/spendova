@@ -13,7 +13,9 @@ import { authApi } from "@/api/auth/api";
 import type {
   LoginResponse,
   ProfileUpdate,
+  SignInMethod,
   SpendovaUser,
+  TwoFactorChallenge,
 } from "@/api/auth/types";
 import { ApiError, refreshAccessToken, waitForRefresh } from "@/api/client";
 import {
@@ -31,7 +33,15 @@ type AuthContextValue = {
   loading: boolean;
   error: string | null;
   retryProfile: () => Promise<void>;
-  signInWithEmail: (email: string, password: string) => Promise<SpendovaUser>;
+  signInWithEmail: (
+    email: string,
+    password: string,
+  ) => Promise<SpendovaUser | TwoFactorChallenge>;
+  completeTwoFactor: (
+    challengeToken: string,
+    method: SignInMethod,
+    code: string,
+  ) => Promise<SpendovaUser>;
   signUpWithEmail: (
     name: string,
     email: string,
@@ -103,6 +113,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const result = await authApi.login(email, password);
       if (requestId !== generation.current)
         throw new Error("Sign-in changed. Please try again.");
+      if ("two_factor_required" in result) return result;
+      acceptLogin(result);
+      return result.account;
+    },
+    [acceptLogin],
+  );
+  const completeTwoFactor = useCallback(
+    async (challengeToken: string, method: SignInMethod, code: string) => {
+      const requestId = ++generation.current;
+      const result = await authApi.completeTwoFactor(
+        challengeToken,
+        method,
+        code,
+      );
+      if (requestId !== generation.current)
+        throw new Error("Sign-in changed. Please try again.");
       acceptLogin(result);
       return result.account;
     },
@@ -149,6 +175,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       error,
       retryProfile: restore,
       signInWithEmail,
+      completeTwoFactor,
       signUpWithEmail,
       sendEmailVerificationCode,
       verifyEmailCode,
@@ -156,6 +183,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signOut,
     }),
     [
+      completeTwoFactor,
       user,
       profile,
       loading,

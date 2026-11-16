@@ -20,14 +20,17 @@ def register(api, email="local@example.com"):
     return data(response)
 
 
-def test_local_signup_hashes_password_and_requires_verification(api, mailbox, monkeypatch):
+def test_local_signup_hashes_password_and_allows_verify_later(api, mailbox, monkeypatch):
     monkeypatch.setattr(get_settings(), "auth_required", True)
     result = register(api)
     token = result["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
     assert "HttpOnly" in api.cookies.get("spendova_refresh", "") or api.cookies.get("spendova_refresh")
     assert result["development_code"] in mailbox[-1][1]
-    assert api.get(f"{API}/accounts", headers=headers).status_code == 403
+    assert api.get(f"{API}/accounts", headers=headers).status_code == 200
+    sent = len(mailbox)
+    login = data(api.post(f"{API}/auth/login", json={"email": "local@example.com", "password": PASSWORD}))
+    assert login["development_code"] is None and len(mailbox) == sent
     confirmed = api.post(f"{API}/auth/verification/confirm", headers=headers, json={"code": result["development_code"]})
     assert data(confirmed)["email_verified"] is True
     assert api.get(f"{API}/accounts", headers=headers).status_code == 200

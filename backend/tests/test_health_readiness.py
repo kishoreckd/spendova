@@ -35,6 +35,6 @@ def test_missing_schema_returns_degraded_health_without_secrets(monkeypatch):
     )
     response = health(MagicMock())
     assert response.status_code == 503
-    data = json.loads(response.body)["data"]
+    data = json.loads(bytes(response.body))["data"]
     assert data["db"] == "ok" and data["status"] == "degraded"
     assert "DATABASE_URL" not in str(data)

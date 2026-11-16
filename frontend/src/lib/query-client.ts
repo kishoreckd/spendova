@@ -21,6 +21,7 @@ export const queryClient = new QueryClient({
 /** Every server-state key lives here so invalidation stays consistent across features. */
 export const queryKeys = {
   preferences: ["preferences"] as const,
+  twoFactor: ["two-factor"] as const,
   insights: ["insights"] as const,
   accounts: ["accounts"] as const,
   categories: ["categories"] as const,

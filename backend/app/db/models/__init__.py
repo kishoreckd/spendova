@@ -17,9 +17,12 @@ from app.db.models.password_reset_code_model import PasswordResetCode
 from app.db.models.preferences_model import AiCharge, AiDay, Preferences, ReminderReceipt
 from app.db.models.recurring_rule_model import RecurringRule
 from app.db.models.transaction_model import Transaction
+from app.db.models.two_factor_model import TwoFactor, TwoFactorChallenge
 from app.db.models.user_model import User
 
 __all__ = [
+    "TwoFactor",
+    "TwoFactorChallenge",
     "PasswordCredential",
     "UserSession",
     "User",

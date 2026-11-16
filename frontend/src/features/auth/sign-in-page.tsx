@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/common/password-input";
 import { useAuth } from "@/features/auth/auth-context";
+import { TwoFactorStep } from "@/features/auth/two-factor-step";
+import type { TwoFactorChallenge } from "@/api/auth/types";
 import { controlProps } from "@/lib/forms";
 
 type Mode = "sign-in" | "sign-up";
@@ -39,6 +41,7 @@ export default function SignInPage() {
   const [submitting, setSubmitting] = useState<"email" | "google" | null>(null);
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<SignInErrors>({});
+  const [challenge, setChallenge] = useState<TwoFactorChallenge | null>(null);
 
   function clearField(field: keyof SignInErrors) {
     setFieldErrors((current) => ({ ...current, [field]: undefined }));
@@ -50,11 +53,7 @@ export default function SignInPage() {
     setFieldErrors({});
   }
 
-  function destination(profile: {
-    email_verified: boolean;
-    onboarding_completed: boolean;
-  }) {
-    if (!profile.email_verified) return "/verify-email";
+  function destination(profile: { onboarding_completed: boolean }) {
     return profile.onboarding_completed ? "/" : "/onboarding";
   }
 
@@ -87,8 +86,9 @@ export default function SignInPage() {
           state: { developmentCode },
         });
       } else {
-        const profile = await signInWithEmail(values.email, values.password);
-        navigate(destination(profile), { replace: true });
+        const result = await signInWithEmail(values.email, values.password);
+        if ("two_factor_required" in result) setChallenge(result);
+        else navigate(destination(result), { replace: true });
       }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Could not sign in");
@@ -159,100 +159,116 @@ export default function SignInPage() {
                 className="mb-6 hidden w-40 dark:block lg:dark:hidden"
               />
               <CardTitle className="text-2xl">
-                {mode === "sign-in" ? "Welcome back" : "Create your account"}
+                {challenge
+                  ? "Two-step sign-in"
+                  : mode === "sign-in"
+                    ? "Welcome back"
+                    : "Create your account"}
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-5">
-              <div className="grid grid-cols-2 rounded-2xl bg-muted p-1.5">
-                <Button
-                  type="button"
-                  variant={mode === "sign-in" ? "default" : "ghost"}
-                  onClick={() => switchMode("sign-in")}
-                >
-                  Sign in
-                </Button>
-                <Button
-                  type="button"
-                  variant={mode === "sign-up" ? "default" : "ghost"}
-                  onClick={() => switchMode("sign-up")}
-                >
-                  Sign up
-                </Button>
-              </div>
-              <form noValidate className="space-y-4" onSubmit={submitEmail}>
-                {mode === "sign-up" && (
-                  <Field id="name" label="Full name" error={fieldErrors.name}>
+            {challenge ? (
+              <CardContent>
+                <TwoFactorStep
+                  challenge={challenge}
+                  onDone={(profile) =>
+                    navigate(destination(profile), { replace: true })
+                  }
+                  onCancel={() => setChallenge(null)}
+                />
+              </CardContent>
+            ) : (
+              <CardContent className="space-y-5">
+                <div className="grid grid-cols-2 rounded-2xl bg-muted p-1.5">
+                  <Button
+                    type="button"
+                    variant={mode === "sign-in" ? "default" : "ghost"}
+                    onClick={() => switchMode("sign-in")}
+                  >
+                    Sign in
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={mode === "sign-up" ? "default" : "ghost"}
+                    onClick={() => switchMode("sign-up")}
+                  >
+                    Sign up
+                  </Button>
+                </div>
+                <form noValidate className="space-y-4" onSubmit={submitEmail}>
+                  {mode === "sign-up" && (
+                    <Field id="name" label="Full name" error={fieldErrors.name}>
+                      <Input
+                        {...controlProps("name", fieldErrors.name)}
+                        className="h-11 rounded-xl sm:h-11"
+                        name="name"
+                        autoComplete="name"
+                        onChange={() => clearField("name")}
+                      />
+                    </Field>
+                  )}
+                  <Field id="email" label="Email" error={fieldErrors.email}>
                     <Input
-                      {...controlProps("name", fieldErrors.name)}
+                      {...controlProps("email", fieldErrors.email)}
                       className="h-11 rounded-xl sm:h-11"
-                      name="name"
-                      autoComplete="name"
-                      onChange={() => clearField("name")}
+                      name="email"
+                      type="email"
+                      inputMode="email"
+                      autoComplete="email"
+                      defaultValue={prefilledEmail}
+                      onChange={() => clearField("email")}
                     />
                   </Field>
-                )}
-                <Field id="email" label="Email" error={fieldErrors.email}>
-                  <Input
-                    {...controlProps("email", fieldErrors.email)}
-                    className="h-11 rounded-xl sm:h-11"
-                    name="email"
-                    type="email"
-                    inputMode="email"
-                    autoComplete="email"
-                    defaultValue={prefilledEmail}
-                    onChange={() => clearField("email")}
-                  />
-                </Field>
-                <Field
-                  id="password"
-                  label="Password"
-                  error={fieldErrors.password}
-                  action={
-                    mode === "sign-in" && (
-                      <button
-                        type="button"
-                        className="text-xs text-primary hover:underline"
-                        onClick={forgotPassword}
-                      >
-                        Forgot password?
-                      </button>
-                    )
-                  }
-                >
-                  <PasswordInput
-                    {...controlProps("password", fieldErrors.password)}
-                    className="h-11 rounded-xl sm:h-11"
-                    name="password"
-                    autoComplete={
-                      mode === "sign-up" ? "new-password" : "current-password"
+                  <Field
+                    id="password"
+                    label="Password"
+                    error={fieldErrors.password}
+                    action={
+                      mode === "sign-in" && (
+                        <button
+                          type="button"
+                          className="text-xs text-primary hover:underline"
+                          onClick={forgotPassword}
+                        >
+                          Forgot password?
+                        </button>
+                      )
                     }
-                    onChange={() => clearField("password")}
-                  />
-                </Field>
-                <FormAlert>{error}</FormAlert>
+                  >
+                    <PasswordInput
+                      {...controlProps("password", fieldErrors.password)}
+                      className="h-11 rounded-xl sm:h-11"
+                      name="password"
+                      autoComplete={
+                        mode === "sign-up" ? "new-password" : "current-password"
+                      }
+                      onChange={() => clearField("password")}
+                    />
+                  </Field>
+                  <FormAlert>{error}</FormAlert>
+                  <Button
+                    type="submit"
+                    className="h-11 w-full rounded-xl sm:h-11"
+                    loading={submitting === "email"}
+                    disabled={submitting === "google"}
+                  >
+                    {submitting === "email"
+                      ? mode === "sign-in"
+                        ? "Signing in…"
+                        : "Creating account…"
+                      : mode === "sign-in"
+                        ? "Sign in"
+                        : "Create account"}
+                  </Button>
+                </form>
                 <Button
-                  type="submit"
-                  className="h-11 w-full rounded-xl sm:h-11"
-                  loading={submitting === "email"}
-                  disabled={submitting === "google"}
+                  variant="ghost"
+                  className="w-full"
+                  onClick={() => navigate("/demo")}
                 >
-                  {submitting === "email"
-                    ? mode === "sign-in"
-                      ? "Signing in…"
-                      : "Creating account…"
-                    : mode === "sign-in"
-                      ? "Sign in"
-                      : "Create account"}
+                  Preview sample dashboard
                 </Button>
-              </form>
-              <Button
-                variant="ghost"
-                className="w-full"
-                onClick={() => navigate("/demo")}
-              >
-                Preview sample dashboard
-              </Button>
-            </CardContent>
+              </CardContent>
+            )}
           </Card>
         </section>
       </div>

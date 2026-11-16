@@ -18,8 +18,14 @@ from app.schemas.auth import (
     VerificationCodeRequest,
     VerificationCodeSent,
 )
+from app.schemas.two_factor import (
+    TwoFactorChallengeRead,
+    TwoFactorCodeSent,
+    TwoFactorLoginRequest,
+    TwoFactorResendRequest,
+)
 from app.services import auth_service as service
-from app.services import session_service
+from app.services import session_service, two_factor_service
 from app.services.audit_service import AuditAction, record
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
@@ -54,11 +60,12 @@ def set_refresh_cookie(response: Response, token: str) -> None:
 
 
 def login_result(
-    db: DbSession, request: Request, response: Response, background: BackgroundTasks, user
+    db: DbSession, request: Request, response: Response, background: BackgroundTasks, user, send_code: bool = False
 ) -> LoginResponse:
     session, token = session_service.create_session(db, user.id, request.headers.get("user-agent"))
     code = None
-    if not user.email_verified:
+    # Only sign-up sends a code; afterwards verification is optional and the user asks for a code.
+    if send_code and not user.email_verified:
         try:
             code = service.send_verification_code(db, background, user.id).development_code
         except AppError as exc:
@@ -83,13 +90,17 @@ def register(
     payload: RegisterRequest, request: Request, response: Response, background: BackgroundTasks, db: DbSession
 ):
     user = session_service.register(db, payload)
-    result = login_result(db, request, response, background, user)
+    result = login_result(db, request, response, background, user, send_code=True)
     record(db, request, AuditAction.USER_SIGN_UP, user_id=user.id, details={"provider": "password"})
     db.commit()
     return result
 
 
-@router.post("/login", response_model=LoginResponse, dependencies=[Depends(auth_limit), Depends(check_origin)])
+@router.post(
+    "/login",
+    response_model=LoginResponse | TwoFactorChallengeRead,
+    dependencies=[Depends(auth_limit), Depends(check_origin)],
+)
 def login(payload: LoginRequest, request: Request, response: Response, background: BackgroundTasks, db: DbSession):
     try:
         user = session_service.check_password(db, payload.email, payload.password)
@@ -97,8 +108,46 @@ def login(payload: LoginRequest, request: Request, response: Response, backgroun
         record(db, request, AuditAction.USER_LOGIN_FAILED, user_id=None)
         db.commit()  # Persist per-account failed attempts and lockouts.
         raise
+    two_factor = two_factor_service.enabled_for(db, user.id)
+    if two_factor:
+        # No session or cookie until the second step succeeds.
+        challenge = two_factor_service.start_challenge(db, background, user, two_factor)
+        db.commit()
+        return challenge
     result = login_result(db, request, response, background, user)
     record(db, request, AuditAction.USER_LOGIN, user_id=user.id)
+    db.commit()
+    return result
+
+
+@router.post("/login/2fa", response_model=LoginResponse, dependencies=[Depends(auth_limit), Depends(check_origin)])
+def login_two_factor(
+    payload: TwoFactorLoginRequest, request: Request, response: Response, background: BackgroundTasks, db: DbSession
+):
+    try:
+        user, ok = two_factor_service.complete_challenge(db, payload.challenge_token, payload.method, payload.code)
+    except AppError:
+        db.commit()  # Drop the expired or exhausted challenge.
+        raise
+    if not ok:
+        record(db, request, AuditAction.USER_LOGIN_FAILED, user_id=user.id, details={"step": payload.method})
+        db.commit()  # Keep the attempt count.
+        raise AppError.bad_request("That code isn't right. Try again.")
+    result = login_result(db, request, response, background, user)
+    record(db, request, AuditAction.USER_LOGIN, user_id=user.id, details={"two_factor": payload.method})
+    db.commit()
+    return result
+
+
+@router.post(
+    "/login/2fa/resend", response_model=TwoFactorCodeSent, dependencies=[Depends(auth_limit), Depends(check_origin)]
+)
+def resend_two_factor_code(payload: TwoFactorResendRequest, background: BackgroundTasks, db: DbSession):
+    try:
+        result = two_factor_service.resend_code(db, background, payload.challenge_token)
+    except AppError:
+        db.commit()
+        raise
     db.commit()
     return result
 

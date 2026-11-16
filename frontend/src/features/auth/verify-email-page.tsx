@@ -42,7 +42,7 @@ export default function VerifyEmailPage() {
     setError("");
     try {
       const updated = await verifyEmailCode(code);
-      navigate(updated.onboarding_completed ? "/" : "/onboarding", {
+      navigate(updated.onboarding_completed ? "/" : "/secure-account", {
         replace: true,
       });
     } catch (reason) {
@@ -88,11 +88,11 @@ export default function VerifyEmailPage() {
           </div>
           <CardTitle className="text-2xl">Check your inbox</CardTitle>
           <CardDescription>
-            We sent a six-digit code to{" "}
+            Enter the six-digit verification code for{" "}
             <span className="font-medium text-foreground">
               {profile?.email ?? "your email"}
             </span>
-            . It expires in 10 minutes.
+            , request a new one, or verify later.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5 px-6 pb-7 sm:px-8">
@@ -127,6 +127,20 @@ export default function VerifyEmailPage() {
               {saving ? "Verifying…" : "Verify email"}
             </Button>
           </form>
+          <Button
+            variant="outline"
+            className="h-11 w-full rounded-xl sm:h-11"
+            onClick={() =>
+              navigate(
+                profile?.onboarding_completed ? "/" : "/secure-account",
+                {
+                  replace: true,
+                },
+              )
+            }
+          >
+            Verify later
+          </Button>
           <div className="flex flex-col-reverse gap-1 min-[380px]:flex-row min-[380px]:justify-between">
             <Button
               variant="ghost"

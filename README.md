@@ -57,7 +57,7 @@ docker compose up -d --build --wait
 - App: http://localhost:5173
 - Swagger: http://localhost:8000/docs
 - Health: http://localhost:8000/health
-- Local mail inbox: http://localhost:8026
+- Local mail inbox: http://localhost:8126
 
 Compose runs the Vite development frontend, FastAPI, PostgreSQL and Mailpit. It applies
 Alembic migrations before the API starts. The database is private to the Docker network and

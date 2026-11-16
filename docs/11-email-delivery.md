@@ -4,7 +4,10 @@
 
 | Email | Template | Sent when |
 |---|---|---|
-| Verify your email | `verify_email.html` | Email/password sign-up, or “resend code” |
+| Verify your email | `verify_email.html` | Email/password sign-up, “resend code”, or “Verify email” on Profile |
+
+Verification is optional (“Verify later”): unverified users can use every route. Sign-in no longer
+sends a code. Scheduled reminder emails still go only to verified addresses.
 | Reset your password | `forgot_password.html` | `POST /auth/password-reset/request` for an existing password account |
 | You sign in with Google | `google_account.html` | A reset is requested for a Google-only account |
 | Password changed | `password_changed.html` | A reset completes |
@@ -34,7 +37,7 @@ Preview all templates, light and dark: `python scripts/preview_emails.py` → `a
 
 | Where | Template | SMTP | Read the mail |
 |---|---|---|---|
-| Local | `backend/.env.example` | Mailpit `127.0.0.1:1026`, no auth, no TLS (`docker compose up -d mailpit`) | http://127.0.0.1:8026 |
+| Local | `backend/.env.example` | Mailpit `127.0.0.1:1126`, no auth, no TLS (`docker compose up -d mailpit`) | http://127.0.0.1:8126 |
 | Production (Vercel) | `backend/.env.production.example` | Brevo `smtp-relay.brevo.com:587`, STARTTLS, SMTP login + SMTP key, verified sender | Real inboxes |
 
 - `EMAIL_DELIVERY_MODE=console` is still available locally without Docker: messages print in the

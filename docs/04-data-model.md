@@ -620,3 +620,11 @@ locked_until. `user_sessions`: UUID id, indexed user_id FK (cascade), unique ind
 refresh_digest, expires_at, created_at, user_agent. Existing users and all financial foreign keys
 remain unchanged. Password reset can add local credentials to an existing account after code
 verification and revokes its sessions.
+
+## Two-step sign-in — migration 20261113_0017
+
+`two_factor`: user_id primary/FK (cascade), method (`totp` | `email`), enabled, totp_secret
+(AES-GCM sealed), totp_last_counter (replay guard), recovery_hashes (JSON list of HMAC digests,
+each removed when used), created_at, updated_at. `two_factor_challenges`: id = SHA-256 of the
+sign-in challenge token, indexed user_id FK (cascade), code_digest and code_sent_at (email method),
+expires_at (10 minutes), attempts (max 5), created_at. One live challenge per user.

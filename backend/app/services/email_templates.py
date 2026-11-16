@@ -97,6 +97,20 @@ def verification_email(name: str | None, code: str) -> EmailContent:
     )
 
 
+def sign_in_code_email(name: str | None, code: str, minutes: int) -> EmailContent:
+    return EmailContent(
+        template="verify_email.html",
+        subject=f"{code} is your Spendova sign-in code",
+        heading="Your sign-in code",
+        preheader="Enter this code in Spendova to finish signing in.",
+        greeting=_greeting(name),
+        paragraphs=["Enter this code in Spendova to finish signing in."],
+        one_time_code=code,
+        code_note=f"Expires in {minutes} minutes",
+        footnote="If you didn't try to sign in, change your password right away.",
+    )
+
+
 def password_reset_email(name: str | None, code: str) -> EmailContent:
     minutes = get_settings().password_reset_code_minutes
     return EmailContent(

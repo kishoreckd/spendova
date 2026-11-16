@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BadgeCheck, Globe2, Landmark, Pencil } from "lucide-react";
+import { BadgeCheck, Globe2, Landmark, MailCheck, Pencil } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -23,7 +23,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAuth } from "@/features/auth/auth-context";
-import { controlProps, errorMessage, notifySuccess } from "@/lib/forms";
+import { TwoFactorCard } from "@/features/profile/two-factor-card";
+import {
+  controlProps,
+  errorMessage,
+  notifyError,
+  notifySuccess,
+} from "@/lib/forms";
 
 type ProfileErrors = Partial<
   Record<"name" | "country" | "currency" | "locale" | "timeZone", string>
@@ -136,8 +142,21 @@ function validateProfile(values: {
 }
 
 export default function ProfilePage() {
-  const { profile, updateProfile } = useAuth();
+  const { profile, updateProfile, sendEmailVerificationCode } = useAuth();
   const navigate = useNavigate();
+  const [sendingCode, setSendingCode] = useState(false);
+
+  async function startVerification() {
+    setSendingCode(true);
+    try {
+      const developmentCode = await sendEmailVerificationCode();
+      navigate("/verify-email", { state: { developmentCode } });
+    } catch (reason) {
+      notifyError(reason, "Couldn't send a code");
+    } finally {
+      setSendingCode(false);
+    }
+  }
   const [name, setName] = useState(profile?.display_name ?? "");
   const [country, setCountry] = useState(profile?.country_code ?? "");
   const [currency, setCurrency] = useState(profile?.base_currency ?? "INR");
@@ -221,10 +240,19 @@ export default function ProfilePage() {
                 <h2 className="text-2xl font-semibold">
                   {profile?.display_name ?? "Spendova user"}
                 </h2>
-                {profile?.email_verified && (
+                {profile?.email_verified ? (
                   <Badge variant="secondary">
                     <BadgeCheck className="size-3.5" /> Verified
                   </Badge>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    loading={sendingCode}
+                    onClick={() => void startVerification()}
+                  >
+                    <MailCheck /> Verify email
+                  </Button>
                 )}
               </div>
               <p className="text-sm text-muted-foreground">{profile?.email}</p>
@@ -378,6 +406,7 @@ export default function ProfilePage() {
           </Card>
         </div>
         <div className="space-y-6">
+          <TwoFactorCard />
           <Card>
             <CardHeader>
               <CardTitle>Workspace</CardTitle>

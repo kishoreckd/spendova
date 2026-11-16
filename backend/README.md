@@ -50,8 +50,8 @@ Rate limits are in memory per serverless instance, so they are approximate on Ve
 ## Local email (Mailpit)
 
 `docker compose up -d mailpit` from the repo root starts a local mail catcher. The local
-template sends through it (`SMTP_HOST=127.0.0.1`, `SMTP_PORT=1026`); read the codes at
-http://127.0.0.1:8026. To get real emails locally, use the Brevo settings from the production
+template sends through it (`SMTP_HOST=127.0.0.1`, `SMTP_PORT=1126`); read the codes at
+http://127.0.0.1:8126. To get real emails locally, use the Brevo settings from the production
 template in your private `backend/.env` while keeping `ENVIRONMENT=development`.
 
 ## Authentication
@@ -116,6 +116,6 @@ so production cookies use Secure and SameSite=Strict. Set CORS_ORIGINS to the ex
 
 Existing user IDs and financial records are preserved. Existing Firebase users must use Forgot
 password to establish their local password after email-code confirmation. Local mail is captured
-at http://localhost:8026; production retains the Brevo SMTP outbox pipeline. The Password project's
+at http://localhost:8126; production retains the Brevo SMTP outbox pipeline. The Password project's
 vault-specific key derivation/encryption and optional authenticator/recovery MFA are not copied
 into Spendova's account login.
