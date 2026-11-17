@@ -514,7 +514,7 @@ Unique `(user_id, deduplication_key)` when present.
 - `trip_expenses`: description, category, amount, original date, payer, split mode and posted transaction.
 - `trip_expense_shares`: exact participant allocations whose sum equals the expense.
 
-Open trips are provisional. Closing creates one idempotent expense transaction per non-zero user share, preserving the original expense date and category. Group balances remain settlement data and are not income or additional spending.
+Open trips are provisional. Closing creates one idempotent expense transaction per non-zero user share, preserving the original expense date and category. Reopening voids those transactions and increments `trips.revision` (migration 20261117_0020) so the next close posts fresh ones (key `trip:{id}:expense:{expenseId}:r{revision}`; revision 0 keeps the original key). Deleting a trip keeps already-posted transactions. `trip_settlements` (migration 20261117_0021): id, trip_id FK (cascade), from/to participant FKs (cascade), amount Numeric(19,4), occurred_on, created_at. A settlement raises the payer's balance and lowers the receiver's; it is never income or spending. Group balances remain settlement data and are not income or additional spending.
 
 ## 13. Audit and operational tables
 

@@ -3,7 +3,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, Date, ForeignKey, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Date, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.model_helpers import created_at_column, new_id, updated_at_column
@@ -24,6 +24,8 @@ class Trip(Base):
     currency: Mapped[str] = mapped_column(String(3), default="INR")
     budget: Mapped[Decimal | None] = mapped_column(Numeric(19, 4))
     notes: Mapped[str | None] = mapped_column(Text)
+    # Bumped on every reopen so the next close posts fresh ledger transactions.
+    revision: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     created_at: Mapped[datetime] = created_at_column()
     updated_at: Mapped[datetime] = updated_at_column()
 
@@ -32,6 +34,9 @@ class Trip(Base):
     )
     expenses: Mapped[list["TripExpense"]] = relationship(
         cascade="all, delete-orphan", lazy="selectin", order_by="TripExpense.occurred_on"
+    )
+    settlements: Mapped[list["TripSettlement"]] = relationship(
+        cascade="all, delete-orphan", lazy="selectin", order_by="TripSettlement.created_at"
     )
 
 
@@ -66,6 +71,20 @@ class TripExpense(Base):
     )
     created_at: Mapped[datetime] = created_at_column()
     shares: Mapped[list["TripExpenseShare"]] = relationship(cascade="all, delete-orphan", lazy="selectin")
+
+
+class TripSettlement(Base):
+    """Money one traveller paid another to settle up. Never income or spending in the ledger."""
+
+    __tablename__ = "trip_settlements"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    trip_id: Mapped[str] = mapped_column(ForeignKey("trips.id", ondelete="CASCADE"), index=True)
+    from_participant_id: Mapped[str] = mapped_column(ForeignKey("trip_participants.id", ondelete="CASCADE"), index=True)
+    to_participant_id: Mapped[str] = mapped_column(ForeignKey("trip_participants.id", ondelete="CASCADE"), index=True)
+    amount: Mapped[Decimal] = mapped_column(Numeric(19, 4))
+    occurred_on: Mapped[date] = mapped_column(Date)
+    created_at: Mapped[datetime] = created_at_column()
 
 
 class TripExpenseShare(Base):

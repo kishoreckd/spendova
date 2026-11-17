@@ -52,6 +52,27 @@ class TripExpenseCreate(RequestModel):
     notes: str | None = Field(default=None, max_length=500)
 
 
+class SettlementCreate(RequestModel):
+    from_participant_id: str = Field(min_length=1, max_length=36)
+    to_participant_id: str = Field(min_length=1, max_length=36)
+    amount: Decimal = Field(gt=0, le=1000000000, decimal_places=2)
+    occurred_on: date = Field(default_factory=date.today)
+
+    @model_validator(mode="after")
+    def different_people(self):
+        if self.from_participant_id == self.to_participant_id:
+            raise ValueError("Choose two different travellers")
+        return self
+
+
+class SettlementRead(ApiModel):
+    id: str
+    from_participant_id: str
+    to_participant_id: str
+    amount: Decimal
+    occurred_on: date
+
+
 class TripClose(RequestModel):
     confirm: Literal[True]
 
@@ -104,6 +125,7 @@ class TripRead(ApiModel):
     updated_at: datetime
     participants: list[ParticipantRead]
     expenses: list[ExpenseRead]
+    settlements: list[SettlementRead]
     balances: list[BalanceRead]
     total_spent: Decimal
     user_share: Decimal

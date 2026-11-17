@@ -85,6 +85,95 @@ def test_split_trip_balances_and_close_posts_only_users_share(api):
     assert len(data(api.get(f"{API}/transactions", headers=headers))) == 2
 
 
+def _petrol(category_id: str, payer_id: str, split_mode: str = "personal") -> dict:
+    return {
+        "description": "Petrol",
+        "category": "Transport",
+        "category_id": category_id,
+        "amount": "100.00",
+        "occurred_on": "2026-11-17",
+        "payer_participant_id": payer_id,
+        "split_mode": split_mode,
+    }
+
+
+def _close(api, headers, trip_id: str, key: str) -> dict:
+    return data(
+        api.post(f"{API}/trips/{trip_id}/close", headers={**headers, "Idempotency-Key": key}, json={"confirm": True})
+    )
+
+
+def test_reopen_voids_postings_and_reclosing_posts_the_corrected_split(api):
+    headers = sign_up(api, "trip-reopen", name="Kishore")
+    category = category_named(api, headers, "Transport")
+    trip = data(api.post(f"{API}/trips", headers=headers, json={"name": "test"}))
+    owner = trip["participants"][0]
+    trip = data(
+        api.post(f"{API}/trips/{trip['id']}/expenses", headers=headers, json=_petrol(category["id"], owner["id"]))
+    )
+    trip = data(api.post(f"{API}/trips/{trip['id']}/participants", headers=headers, json={"name": "vijay"}))
+    _close(api, headers, trip["id"], "close-test-1")
+    posted = data(api.get(f"{API}/transactions", headers=headers))
+    assert [item["amount"] for item in posted] == ["100.0000"]
+
+    # Closed trips stay read-only until reopened.
+    expense_id = trip["expenses"][0]["id"]
+    edit_path = f"{API}/trips/{trip['id']}/expenses/{expense_id}"
+    assert api.put(edit_path, headers=headers, json=_petrol(category["id"], owner["id"], "equal")).status_code == 400
+
+    reopened = data(api.post(f"{API}/trips/{trip['id']}/reopen", headers=headers))
+    assert reopened["status"] != "closed" and reopened["expenses"][0]["posted_transaction_id"] is None
+    assert data(api.get(f"{API}/dashboard?year=2026&month=11", headers=headers))["spending"] == "0"
+
+    vijay = next(item for item in reopened["participants"] if item["name"] == "vijay")
+    edited = data(api.put(edit_path, headers=headers, json=_petrol(category["id"], vijay["id"], "equal")))
+    assert Decimal(edited["user_share"]) == Decimal(edited["user_owes_others"]) == Decimal("50")
+
+    _close(api, headers, trip["id"], "close-test-2")
+    active = [item for item in data(api.get(f"{API}/transactions", headers=headers)) if item["status"] != "voided"]
+    assert [item["amount"] for item in active] == ["50.0000"]
+    assert data(api.get(f"{API}/dashboard?year=2026&month=11", headers=headers))["spending"] == "50.0000"
+
+
+def test_settle_up_zeroes_balances_without_touching_the_ledger(api):
+    headers = sign_up(api, "trip-settle", name="Kishore")
+    stranger = sign_up(api, "trip-settle-stranger")
+    category = category_named(api, headers, "Transport")
+    trip = data(api.post(f"{API}/trips", headers=headers, json={"name": "Goa"}))
+    owner = trip["participants"][0]
+    trip = data(api.post(f"{API}/trips/{trip['id']}/participants", headers=headers, json={"name": "vijay"}))
+    vijay = next(item for item in trip["participants"] if item["name"] == "vijay")
+    path = f"{API}/trips/{trip['id']}"
+    api.post(f"{path}/expenses", headers=headers, json=_petrol(category["id"], owner["id"], "equal"))
+    _close(api, headers, trip["id"], "close-goa-settle")
+
+    payment = {"from_participant_id": vijay["id"], "to_participant_id": owner["id"], "amount": "50.00"}
+    same = {**payment, "to_participant_id": vijay["id"]}
+    assert api.post(f"{path}/settlements", headers=headers, json=same).status_code == 400
+    assert api.post(f"{path}/settlements", headers=stranger, json=payment).status_code == 404
+    settled = data(api.post(f"{path}/settlements", headers=headers, json=payment))
+    assert all(Decimal(item["balance"]) == 0 for item in settled["balances"])
+    assert Decimal(settled["others_owe_user"]) == 0
+    assert len(data(api.get(f"{API}/transactions", headers=headers))) == 1  # only the posted share
+
+    removed = data(api.delete(f"{path}/settlements/{settled['settlements'][0]['id']}", headers=headers))
+    assert Decimal(removed["others_owe_user"]) == Decimal("50")
+
+
+def test_delete_trip_keeps_posted_ledger_and_hides_trip_from_others(api):
+    headers = sign_up(api, "trip-delete")
+    stranger = sign_up(api, "trip-delete-stranger")
+    category = category_named(api, headers, "Transport")
+    trip = data(api.post(f"{API}/trips", headers=headers, json={"name": "Weekend"}))
+    owner = trip["participants"][0]
+    api.post(f"{API}/trips/{trip['id']}/expenses", headers=headers, json=_petrol(category["id"], owner["id"]))
+    _close(api, headers, trip["id"], "close-weekend")
+    assert api.delete(f"{API}/trips/{trip['id']}", headers=stranger).status_code == 404
+    assert api.delete(f"{API}/trips/{trip['id']}", headers=headers).status_code == 204
+    assert data(api.get(f"{API}/trips", headers=headers)) == []
+    assert len(data(api.get(f"{API}/transactions", headers=headers))) == 1
+
+
 def test_trip_rejects_cross_user_access_and_invalid_custom_split(api):
     owner_headers = sign_up(api, "trip-private")
     stranger_headers = sign_up(api, "trip-stranger")

@@ -1,5 +1,10 @@
 import { apiFetch, newIdempotencyKey } from "../client";
-import type { Trip, TripCreate, TripExpenseCreate } from "./types";
+import type {
+  Trip,
+  TripCreate,
+  TripExpenseCreate,
+  TripSettlementCreate,
+} from "./types";
 
 export const tripsApi = {
   list: (signal?: AbortSignal) => apiFetch<Trip[]>("/trips", { signal }),
@@ -12,6 +17,21 @@ export const tripsApi = {
     }),
   addExpense: (tripId: string, body: TripExpenseCreate) =>
     apiFetch<Trip>(`/trips/${tripId}/expenses`, { method: "POST", body }),
+  updateExpense: (tripId: string, expenseId: string, body: TripExpenseCreate) =>
+    apiFetch<Trip>(`/trips/${tripId}/expenses/${expenseId}`, {
+      method: "PUT",
+      body,
+    }),
+  addSettlement: (tripId: string, body: TripSettlementCreate) =>
+    apiFetch<Trip>(`/trips/${tripId}/settlements`, { method: "POST", body }),
+  deleteSettlement: (tripId: string, settlementId: string) =>
+    apiFetch<Trip>(`/trips/${tripId}/settlements/${settlementId}`, {
+      method: "DELETE",
+    }),
+  reopen: (tripId: string) =>
+    apiFetch<Trip>(`/trips/${tripId}/reopen`, { method: "POST" }),
+  remove: (tripId: string) =>
+    apiFetch<void>(`/trips/${tripId}`, { method: "DELETE" }),
   deleteExpense: (tripId: string, expenseId: string) =>
     apiFetch<Trip>(`/trips/${tripId}/expenses/${expenseId}`, {
       method: "DELETE",

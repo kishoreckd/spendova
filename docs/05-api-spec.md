@@ -82,8 +82,13 @@ and/or EMI. With only the EMI, the effective annual rate is solved for and
 | GET | `/trips/{id}` | Trip expenses, participants, allocations and balances |
 | POST | `/trips/{id}/participants` | Add a traveller; the first addition converts a personal trip to split and rebalances only existing equal splits |
 | POST | `/trips/{id}/expenses` | Add an expense with payer and equal/custom/personal allocation |
+| PUT | `/trips/{id}/expenses/{expenseId}` | Replace an open trip expense (details, payer, split) |
 | DELETE | `/trips/{id}/expenses/{expenseId}` | Remove an expense from an open trip |
 | POST | `/trips/{id}/close` | Close and post only the user's shares; requires `Idempotency-Key` |
+| POST | `/trips/{id}/settlements` | `{from_participant_id, to_participant_id, amount, occurred_on}`; record a payment between travellers (open or finished trips; never posted to the ledger) |
+| DELETE | `/trips/{id}/settlements/{settlementId}` | Remove a recorded payment |
+| POST | `/trips/{id}/reopen` | Void the shares posted at close and reopen the trip for edits |
+| DELETE | `/trips/{id}` | 204; delete the trip, travellers and expenses (posted ledger transactions stay) |
 
 Closing preserves each expense's original date/category for monthly and yearly reports. Participant settlements are not income or duplicate expenses.
 

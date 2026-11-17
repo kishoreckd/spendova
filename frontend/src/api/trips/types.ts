@@ -23,6 +23,19 @@ export type TripBalance = {
   share: string;
   balance: string;
 };
+export type TripSettlement = {
+  id: string;
+  from_participant_id: string;
+  to_participant_id: string;
+  amount: string;
+  occurred_on: string;
+};
+export type TripSettlementCreate = {
+  from_participant_id: string;
+  to_participant_id: string;
+  amount: string;
+  occurred_on: string;
+};
 export type Trip = {
   id: string;
   name: string;
@@ -38,6 +51,7 @@ export type Trip = {
   updated_at: string;
   participants: TripParticipant[];
   expenses: TripExpense[];
+  settlements: TripSettlement[];
   balances: TripBalance[];
   total_spent: string;
   user_share: string;

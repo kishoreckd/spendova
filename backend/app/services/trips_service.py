@@ -5,10 +5,10 @@ from sqlalchemy.orm import Session
 
 from app.core.errors import AppError
 from app.core.finance import MONEY, TransactionType, allocate_equal
-from app.db.models.trip_model import Trip, TripExpense, TripExpenseShare, TripParticipant
+from app.db.models.trip_model import Trip, TripExpense, TripExpenseShare, TripParticipant, TripSettlement
 from app.db.models.user_model import User
 from app.schemas.transactions import TransactionCreate
-from app.schemas.trips import ParticipantCreate, TripCreate, TripExpenseCreate
+from app.schemas.trips import ParticipantCreate, SettlementCreate, TripCreate, TripExpenseCreate
 from app.services import categories_service, transactions_service
 
 
@@ -77,6 +77,26 @@ def add_participant(db: Session, user_id: str, trip_id: str, payload: Participan
 def add_expense(db: Session, user_id: str, trip_id: str, payload: TripExpenseCreate) -> Trip:
     trip = get_trip(db, user_id, trip_id)
     _assert_open(trip)
+    expense = TripExpense(trip_id=trip.id)
+    _apply_expense(db, user_id, trip, expense, payload)
+    trip.expenses.append(expense)
+    db.flush()
+    return trip
+
+
+def update_expense(db: Session, user_id: str, trip_id: str, expense_id: str, payload: TripExpenseCreate) -> Trip:
+    """Replaces an expense's details, payer and split (open trips only)."""
+    trip = get_trip(db, user_id, trip_id)
+    _assert_open(trip)
+    expense = next((item for item in trip.expenses if item.id == expense_id), None)
+    if not expense:
+        raise AppError.not_found("Trip expense not found")
+    _apply_expense(db, user_id, trip, expense, payload)
+    db.flush()
+    return trip
+
+
+def _apply_expense(db: Session, user_id: str, trip: Trip, expense: TripExpense, payload: TripExpenseCreate) -> None:
     participants = _participants(trip)
     if payload.payer_participant_id not in participants:
         raise AppError.bad_request("Payer is not part of this trip")
@@ -85,18 +105,14 @@ def add_expense(db: Session, user_id: str, trip_id: str, payload: TripExpenseCre
     category = categories_service.require_category(
         db, user_id, payload.category_id, "expense", "Trip expenses require an expense category"
     )
-
-    expense = TripExpense(
-        trip_id=trip.id,
-        description=payload.description,
-        category=category.name,
-        amount=payload.amount,
-        occurred_on=payload.occurred_on,
-        payer_participant_id=payload.payer_participant_id,
-        category_id=category.id,
-        split_mode=payload.split_mode,
-        notes=payload.notes,
-    )
+    expense.description = payload.description
+    expense.category = category.name
+    expense.amount = payload.amount
+    expense.occurred_on = payload.occurred_on
+    expense.payer_participant_id = payload.payer_participant_id
+    expense.category_id = category.id
+    expense.split_mode = payload.split_mode
+    expense.notes = payload.notes
     if payload.split_mode == "custom":
         if not payload.shares or payload.participant_ids:
             raise AppError.bad_request("Custom split requires participant amounts")
@@ -119,9 +135,6 @@ def add_expense(db: Session, user_id: str, trip_id: str, payload: TripExpenseCre
             raise AppError.bad_request("Equal split includes every traveller; use custom amounts for a subset")
         ids = list(participants)
         _replace_equal_shares(expense, ids)
-    trip.expenses.append(expense)
-    db.flush()
-    return trip
 
 
 def delete_expense(db: Session, user_id: str, trip_id: str, expense_id: str) -> Trip:
@@ -131,6 +144,34 @@ def delete_expense(db: Session, user_id: str, trip_id: str, expense_id: str) -> 
     if not expense:
         raise AppError.not_found("Trip expense not found")
     db.delete(expense)
+    db.flush()
+    return trip
+
+
+def add_settlement(db: Session, user_id: str, trip_id: str, payload: SettlementCreate) -> Trip:
+    """Records a payment between travellers. Allowed after the trip is finished; never posts to the ledger."""
+    trip = get_trip(db, user_id, trip_id)
+    participants = _participants(trip)
+    if payload.from_participant_id not in participants or payload.to_participant_id not in participants:
+        raise AppError.bad_request("Both travellers must be part of this trip")
+    trip.settlements.append(
+        TripSettlement(
+            from_participant_id=payload.from_participant_id,
+            to_participant_id=payload.to_participant_id,
+            amount=payload.amount,
+            occurred_on=payload.occurred_on,
+        )
+    )
+    db.flush()
+    return trip
+
+
+def delete_settlement(db: Session, user_id: str, trip_id: str, settlement_id: str) -> Trip:
+    trip = get_trip(db, user_id, trip_id)
+    settlement = next((item for item in trip.settlements if item.id == settlement_id), None)
+    if not settlement:
+        raise AppError.not_found("Payment not found")
+    trip.settlements.remove(settlement)
     db.flush()
     return trip
 
@@ -164,23 +205,58 @@ def close_trip(db: Session, user_id: str, trip_id: str) -> Trip:
                     category_id=category.id,
                     notes=f"{expense.description} · Your share of {trip.name}"[:500],
                 ),
-                f"trip:{trip.id}:expense:{expense.id}",
+                _posting_key(trip, expense),
             )
             expense.posted_transaction_id = transaction.id
         trip.status = "closed"
     return trip
 
 
+def _posting_key(trip: Trip, expense: TripExpense) -> str:
+    # Revision 0 keeps the original key so trips closed before reopening existed stay idempotent.
+    base = f"trip:{trip.id}:expense:{expense.id}"
+    return base if not trip.revision else f"{base}:r{trip.revision}"
+
+
+def reopen_trip(db: Session, user_id: str, trip_id: str) -> Trip:
+    """Voids the ledger postings made at close so the trip can be corrected and closed again."""
+    trip = get_trip(db, user_id, trip_id)
+    if trip.status != "closed":
+        return trip
+    for expense in trip.expenses:
+        if expense.posted_transaction_id:
+            transactions_service.void_transaction(db, user_id, expense.posted_transaction_id)
+            expense.posted_transaction_id = None
+    trip.status = "planning"
+    trip.revision = (trip.revision or 0) + 1
+    db.flush()
+    return trip
+
+
+def delete_trip(db: Session, user_id: str, trip_id: str) -> None:
+    """Removes the trip. Ledger transactions already posted by a close are kept."""
+    trip = get_trip(db, user_id, trip_id)
+    for expense in list(trip.expenses):
+        db.delete(expense)  # before participants: an expense's payer is RESTRICT
+    db.flush()
+    db.delete(trip)
+    db.flush()
+
+
 def trip_read(trip: Trip) -> dict:
     paid = {item.id: Decimal(0) for item in trip.participants}
     shares = {item.id: Decimal(0) for item in trip.participants}
+    settled = {item.id: Decimal(0) for item in trip.participants}
     for expense in trip.expenses:
         paid[expense.payer_participant_id] += expense.amount
         for share in expense.shares:
             shares[share.participant_id] += share.amount
+    for settlement in trip.settlements:
+        settled[settlement.from_participant_id] += settlement.amount
+        settled[settlement.to_participant_id] -= settlement.amount
     balances = []
     for participant in trip.participants:
-        balance = (paid[participant.id] - shares[participant.id]).quantize(MONEY)
+        balance = (paid[participant.id] - shares[participant.id] + settled[participant.id]).quantize(MONEY)
         balances.append(
             {
                 "participant_id": participant.id,
@@ -191,7 +267,7 @@ def trip_read(trip: Trip) -> dict:
             }
         )
     owner = next(item for item in trip.participants if item.is_user)
-    owner_balance = (paid[owner.id] - shares[owner.id]).quantize(MONEY)
+    owner_balance = (paid[owner.id] - shares[owner.id] + settled[owner.id]).quantize(MONEY)
     return {
         "id": trip.id,
         "name": trip.name,
@@ -207,6 +283,7 @@ def trip_read(trip: Trip) -> dict:
         "updated_at": trip.updated_at,
         "participants": trip.participants,
         "expenses": trip.expenses,
+        "settlements": trip.settlements,
         "balances": balances,
         "total_spent": sum((item.amount for item in trip.expenses), Decimal(0)),
         "user_share": shares[owner.id],

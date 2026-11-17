@@ -1,7 +1,14 @@
-from fastapi import APIRouter, Header, Request
+from fastapi import APIRouter, Header, Request, Response
 
 from app.core.deps import Auth, DbSession
-from app.schemas.trips import ParticipantCreate, TripClose, TripCreate, TripExpenseCreate, TripRead
+from app.schemas.trips import (
+    ParticipantCreate,
+    SettlementCreate,
+    TripClose,
+    TripCreate,
+    TripExpenseCreate,
+    TripRead,
+)
 from app.services import trips_service as service
 from app.services.audit_service import AuditAction, record
 
@@ -40,6 +47,48 @@ def add_expense(trip_id: str, payload: TripExpenseCreate, request: Request, auth
     record(db, request, AuditAction.TRIP_EXPENSE_CREATE, user_id=auth.id, target_type="trip", target_id=trip.id)
     db.commit()
     return service.trip_read(service.get_trip(db, auth.id, trip.id))
+
+
+@router.put("/{trip_id}/expenses/{expense_id}", response_model=TripRead)
+def update_expense(
+    trip_id: str, expense_id: str, payload: TripExpenseCreate, request: Request, auth: Auth, db: DbSession
+):
+    trip = service.update_expense(db, auth.id, trip_id, expense_id, payload)
+    record(db, request, AuditAction.TRIP_EXPENSE_UPDATE, user_id=auth.id, target_type="trip", target_id=trip.id)
+    db.commit()
+    return service.trip_read(service.get_trip(db, auth.id, trip.id))
+
+
+@router.post("/{trip_id}/settlements", response_model=TripRead, status_code=201)
+def add_settlement(trip_id: str, payload: SettlementCreate, request: Request, auth: Auth, db: DbSession):
+    trip = service.add_settlement(db, auth.id, trip_id, payload)
+    record(db, request, AuditAction.TRIP_SETTLEMENT_CREATE, user_id=auth.id, target_type="trip", target_id=trip.id)
+    db.commit()
+    return service.trip_read(service.get_trip(db, auth.id, trip.id))
+
+
+@router.delete("/{trip_id}/settlements/{settlement_id}", response_model=TripRead)
+def delete_settlement(trip_id: str, settlement_id: str, request: Request, auth: Auth, db: DbSession):
+    trip = service.delete_settlement(db, auth.id, trip_id, settlement_id)
+    record(db, request, AuditAction.TRIP_SETTLEMENT_DELETE, user_id=auth.id, target_type="trip", target_id=trip.id)
+    db.commit()
+    return service.trip_read(service.get_trip(db, auth.id, trip.id))
+
+
+@router.post("/{trip_id}/reopen", response_model=TripRead)
+def reopen_trip(trip_id: str, request: Request, auth: Auth, db: DbSession):
+    trip = service.reopen_trip(db, auth.id, trip_id)
+    record(db, request, AuditAction.TRIP_REOPEN, user_id=auth.id, target_type="trip", target_id=trip.id)
+    db.commit()
+    return service.trip_read(service.get_trip(db, auth.id, trip.id))
+
+
+@router.delete("/{trip_id}", status_code=204)
+def delete_trip(trip_id: str, request: Request, auth: Auth, db: DbSession) -> Response:
+    service.delete_trip(db, auth.id, trip_id)
+    record(db, request, AuditAction.TRIP_DELETE, user_id=auth.id, target_type="trip", target_id=trip_id)
+    db.commit()
+    return Response(status_code=204)
 
 
 @router.delete("/{trip_id}/expenses/{expense_id}", response_model=TripRead)
