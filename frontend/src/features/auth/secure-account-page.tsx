@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import QRCode from "qrcode";
-import { Copy, Mail, ShieldCheck, Smartphone } from "lucide-react";
+import { Copy, Download, Mail, ShieldCheck, Smartphone } from "lucide-react";
 import { authApi } from "@/api/auth/api";
 import type { TotpSetup } from "@/api/auth/types";
 import { Field } from "@/components/common/form-field";
@@ -124,6 +124,25 @@ export default function SecureAccountPage() {
     } catch (reason) {
       notifyError(reason, "Couldn't copy");
     }
+  }
+
+  function downloadCodes() {
+    const contents = [
+      "Spendova backup codes",
+      "",
+      ...codes,
+      "",
+      "Each code can be used once.",
+    ].join("\n");
+    const url = URL.createObjectURL(
+      new Blob([contents], { type: "text/plain;charset=utf-8" }),
+    );
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "spendova-backup-codes.txt";
+    link.click();
+    URL.revokeObjectURL(url);
+    notifySuccess("Backup codes downloaded");
   }
 
   const codeForm = (
@@ -268,13 +287,22 @@ export default function SecureAccountPage() {
                   </li>
                 ))}
               </ul>
-              <Button
-                variant="outline"
-                className="h-11 w-full rounded-xl sm:h-11"
-                onClick={() => void copyCodes()}
-              >
-                <Copy /> Copy codes
-              </Button>
+              <div className="grid gap-3 min-[400px]:grid-cols-2">
+                <Button
+                  variant="outline"
+                  className="h-11 w-full rounded-xl sm:h-11"
+                  onClick={() => void copyCodes()}
+                >
+                  <Copy /> Copy codes
+                </Button>
+                <Button
+                  variant="outline"
+                  className="h-11 w-full rounded-xl sm:h-11"
+                  onClick={downloadCodes}
+                >
+                  <Download /> Download
+                </Button>
+              </div>
               <Button
                 className="h-11 w-full rounded-xl sm:h-11"
                 onClick={() => navigate(next, { replace: true })}

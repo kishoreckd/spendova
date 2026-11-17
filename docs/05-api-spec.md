@@ -74,6 +74,19 @@ Loan terms: `principal`, `tenure_months` (1–480), `first_due_on`, `processing_
 and/or EMI. With only the EMI, the effective annual rate is solved for and
 `summary.rate_is_estimated` is true. `installments_paid_before` defaults to EMIs due before today.
 
+## Trip planner
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET / POST | `/trips` | List or create personal/family and split trips |
+| GET | `/trips/{id}` | Trip expenses, participants, allocations and balances |
+| POST | `/trips/{id}/participants` | Add a traveller and rebalance equal splits |
+| POST | `/trips/{id}/expenses` | Add an expense with payer and equal/custom/personal allocation |
+| DELETE | `/trips/{id}/expenses/{expenseId}` | Remove an expense from an open trip |
+| POST | `/trips/{id}/close` | Close and post only the user's shares; requires `Idempotency-Key` |
+
+Closing preserves each expense's original date/category for monthly and yearly reports. Participant settlements are not income or duplicate expenses.
+
 ## Operations (outside `/api/v1`)
 
 | Method | Path | Purpose |

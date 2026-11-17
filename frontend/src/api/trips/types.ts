@@ -1,0 +1,70 @@
+export type TripMode = "personal" | "split";
+export type TripStatus = "planning" | "closed";
+
+export type TripParticipant = { id: string; name: string; is_user: boolean };
+export type TripShare = { participant_id: string; amount: string };
+export type TripExpense = {
+  id: string;
+  description: string;
+  category: string;
+  category_id: string;
+  amount: string;
+  occurred_on: string;
+  payer_participant_id: string;
+  split_mode: "equal" | "custom" | "personal";
+  notes: string | null;
+  posted_transaction_id: string | null;
+  shares: TripShare[];
+};
+export type TripBalance = {
+  participant_id: string;
+  name: string;
+  paid: string;
+  share: string;
+  balance: string;
+};
+export type Trip = {
+  id: string;
+  name: string;
+  destination: string | null;
+  start_on: string | null;
+  end_on: string | null;
+  mode: TripMode;
+  status: TripStatus;
+  currency: string;
+  budget: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  participants: TripParticipant[];
+  expenses: TripExpense[];
+  balances: TripBalance[];
+  total_spent: string;
+  user_share: string;
+  user_paid: string;
+  others_owe_user: string;
+  user_owes_others: string;
+};
+export type TripCreate = {
+  name: string;
+  destination?: string | null;
+  start_on?: string | null;
+  end_on?: string | null;
+  mode: TripMode;
+  currency: string;
+  budget?: string | null;
+  notes?: string | null;
+  participants: string[];
+};
+export type TripExpenseCreate = {
+  description: string;
+  category: string;
+  category_id: string;
+  amount: string;
+  occurred_on: string;
+  payer_participant_id: string;
+  split_mode: "equal" | "custom" | "personal";
+  participant_ids: string[];
+  shares: TripShare[];
+  notes?: string | null;
+};

@@ -224,6 +224,16 @@ Label simple return as not time-weighted. Do not imply investment advice or calc
 - Tags are descriptive and do not affect financial classification.
 - “EMI” may be a UI grouping, but principal must not be categorized as an expense.
 
+## Trip allocations
+
+- An open trip is planning data and does not affect financial reports.
+- Every trip expense records its payer and an allocation across one or more participants.
+- Equal allocation uses exact decimal cents; remainder cents are assigned deterministically so shares equal the expense.
+- Closing posts only the signed-in user's allocated share of each expense, using its original date and category.
+- The group's full trip cost becomes personal spending only when every allocation belongs to the user.
+- Participant reimbursements are not income and must not create another expense.
+- Closing is idempotent: one trip expense can create at most one reporting transaction.
+
 ## 12. Core metrics
 
 For a selected range and base currency:

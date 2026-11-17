@@ -42,6 +42,7 @@ export const queryKeys = {
     ["dashboard", year, month, accountId ?? "all", currency ?? "all"] as const,
   loans: ["loans"] as const,
   loansOverview: ["loans", "overview"] as const,
+  trips: ["trips"] as const,
   loanSchedule: (id: string) => ["loans", id, "schedule"] as const,
 };
 

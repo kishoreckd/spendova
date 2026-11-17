@@ -17,6 +17,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Field, FormAlert } from "@/components/common/form-field";
+import { MoneyInput } from "@/components/common/money-input";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { useAuth } from "@/features/auth/auth-context";
@@ -286,26 +287,19 @@ export default function OnboardingPage() {
                   hint="Leave this blank if your income changes or you want to add it later."
                   error={fieldErrors.income}
                 >
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                      {currency}
-                    </span>
-                    <Input
-                      {...controlProps("income", fieldErrors.income)}
-                      className="pl-14"
-                      value={income}
-                      inputMode="decimal"
-                      autoComplete="off"
-                      placeholder="0"
-                      onChange={(event) => {
-                        setIncome(event.target.value);
-                        setFieldErrors((current) => ({
-                          ...current,
-                          income: undefined,
-                        }));
-                      }}
-                    />
-                  </div>
+                  <MoneyInput
+                    id="income"
+                    symbol={currency}
+                    error={fieldErrors.income}
+                    value={income}
+                    onChange={(event) => {
+                      setIncome(event.target.value);
+                      setFieldErrors((current) => ({
+                        ...current,
+                        income: undefined,
+                      }));
+                    }}
+                  />
                 </Field>
               )}
               {step === 3 && (

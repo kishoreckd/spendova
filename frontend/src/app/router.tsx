@@ -24,6 +24,7 @@ const Accounts = lazy(() => import("@/features/accounts/page"));
 const Assets = lazy(() => import("@/features/assets/page"));
 const Assistant = lazy(() => import("@/features/assistant/page"));
 const Loans = lazy(() => import("@/features/loans/page"));
+const Trips = lazy(() => import("@/features/trips/page"));
 const Categories = lazy(() => import("@/features/categories/page"));
 const Settings = lazy(() => import("@/features/settings/page"));
 const Profile = lazy(() => import("@/features/profile/page"));
@@ -113,6 +114,7 @@ export const router = createBrowserRouter([
           { path: "accounts", element: suspense(<Accounts />) },
           { path: "assets", element: suspense(<Assets />) },
           { path: "loans", element: suspense(<Loans />) },
+          { path: "trips", element: suspense(<Trips />) },
           ...(financeAssistantEnabled
             ? [{ path: "assistant", element: suspense(<Assistant />) }]
             : []),

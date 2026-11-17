@@ -507,6 +507,15 @@ Unique `(user_id, deduplication_key)` when present.
 - `time_zone text`;
 - primary key `(user_id, notification_type, channel)`.
 
+## Trip planner
+
+- `trips`: user-owned name, destination, dates, personal/split mode, status, currency and budget.
+- `trip_participants`: travellers; exactly one represents the signed-in user.
+- `trip_expenses`: description, category, amount, original date, payer, split mode and posted transaction.
+- `trip_expense_shares`: exact participant allocations whose sum equals the expense.
+
+Open trips are provisional. Closing creates one idempotent expense transaction per non-zero user share, preserving the original expense date and category. Group balances remain settlement data and are not income or additional spending.
+
 ## 13. Audit and operational tables
 
 ### `audit_events`

@@ -20,6 +20,7 @@ from app.api.password_reset import router as password_reset_router
 from app.api.preferences import router as preferences_router
 from app.api.recurring import router as recurring_router
 from app.api.transactions import router as transactions_router
+from app.api.trips import router as trips_router
 from app.api.two_factor import router as two_factor_router
 from app.constants.http import API_PREFIX, DOCS_PATHS
 from app.core.config import get_settings
@@ -95,6 +96,7 @@ def create_app() -> FastAPI:
         accounts_router,
         categories_router,
         transactions_router,
+        trips_router,
         recurring_router,
         budgets_router,
         goals_router,

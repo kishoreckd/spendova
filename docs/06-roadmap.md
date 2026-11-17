@@ -13,6 +13,7 @@ Done:
 - [x] Bills, expected income, and investment plans with “mark as paid”.
 - [x] Assets with cost per day and replacement goals.
 - [x] Loans and EMIs: EMI/rate/interest maths, schedules, graphs, pay EMI, dashboard summary.
+- [x] Trip Planner: personal/family and split trips, payer allocations, balances, budgets, and report-safe closing.
 - [x] Audit log, per-IP rate limiting, security headers.
 - [x] Transactional email outbox with retries; branded Jinja templates with dark mode and previews.
 - [x] Frontend restructure: `api/<feature>`, TanStack Query hooks, `components/common` and `layout`.

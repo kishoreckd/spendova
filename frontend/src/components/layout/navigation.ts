@@ -10,6 +10,7 @@ import {
   Tags,
   Target,
   WalletCards,
+  Plane,
 } from "lucide-react";
 import { financeAssistantEnabled } from "@/config/features";
 export const primaryNav = [
@@ -25,6 +26,7 @@ export const manageNav = [
     : []),
   { to: "/accounts", label: "Accounts", icon: WalletCards },
   { to: "/loans", label: "Loans & EMIs", icon: Landmark },
+  { to: "/trips", label: "Trip Planner", icon: Plane },
   { to: "/categories", label: "Categories", icon: Tags },
   { to: "/assets", label: "Assets", icon: Smartphone },
   { to: "/settings", label: "Settings", icon: Settings },
@@ -44,6 +46,7 @@ export const pageTitles: Record<string, string> = {
   "/accounts": "Accounts",
   ...(financeAssistantEnabled ? { "/assistant": "Finance Assistant" } : {}),
   "/loans": "Loans & EMIs",
+  "/trips": "Trip Planner",
   "/categories": "Categories",
   "/assets": "Assets",
   "/settings": "Settings",

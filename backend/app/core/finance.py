@@ -52,6 +52,16 @@ def assert_balanced(entries: tuple[Entry, ...]) -> None:
         raise ValueError(f"unbalanced posting: {debit} != {credit}")
 
 
+def allocate_equal(value: Decimal | str | int, count: int) -> list[Decimal]:
+    """Split money exactly; any remainder cents go to the earliest participants."""
+    if count <= 0:
+        raise ValueError("participant count must be positive")
+    total = amount(value)
+    cents = int(total / MONEY)
+    base, remainder = divmod(cents, count)
+    return [Decimal(base + (1 if index < remainder else 0)) * MONEY for index in range(count)]
+
+
 def monthly_goal_amount(target: Decimal, saved: Decimal, months: int) -> Decimal:
     if months <= 0:
         raise ValueError("months must be positive")

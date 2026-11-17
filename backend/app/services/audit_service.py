@@ -42,6 +42,11 @@ class AuditAction(StrEnum):
     LOAN_CREATE = "LOAN_CREATE"
     LOAN_PAY = "LOAN_PAY"
     LOAN_CLOSE = "LOAN_CLOSE"
+    TRIP_CREATE = "TRIP_CREATE"
+    TRIP_UPDATE = "TRIP_UPDATE"
+    TRIP_EXPENSE_CREATE = "TRIP_EXPENSE_CREATE"
+    TRIP_EXPENSE_DELETE = "TRIP_EXPENSE_DELETE"
+    TRIP_CLOSE = "TRIP_CLOSE"
 
 
 def client_meta(request: Request) -> tuple[str | None, str | None]:
