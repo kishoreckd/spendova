@@ -17,7 +17,7 @@ from app.core.passwords import verify_password
 from app.core.security import code_digest, one_time_code, random_token, seal, sha256_hex, unseal
 from app.db.model_helpers import as_utc, utcnow
 from app.db.models.auth_model import PasswordCredential
-from app.db.models.two_factor_model import TwoFactor, TwoFactorChallenge
+from app.db.models.two_factor_model import TrustedTwoFactorDevice, TwoFactor, TwoFactorChallenge
 from app.db.models.user_model import User
 from app.schemas.two_factor import TwoFactorChallengeRead, TwoFactorCodeSent, TwoFactorStatus
 from app.services import notifications_service as notify
@@ -103,6 +103,42 @@ def disable(db: Session, user_id: str, password: str) -> None:
     _require_password(db, user_id, password)
     db.execute(delete(TwoFactor).where(TwoFactor.user_id == user_id))
     db.execute(delete(TwoFactorChallenge).where(TwoFactorChallenge.user_id == user_id))
+    revoke_trusted_devices(db, user_id)
+
+
+def trust_device(db: Session, user_id: str, user_agent: str | None) -> str:
+    token = random_token()
+    db.add(
+        TrustedTwoFactorDevice(
+            user_id=user_id,
+            token_digest=sha256_hex(token),
+            expires_at=utcnow() + timedelta(days=get_settings().trusted_device_ttl_days),
+            user_agent=user_agent[:512] if user_agent else None,
+        )
+    )
+    db.flush()
+    return token
+
+
+def is_trusted_device(db: Session, user_id: str, token: str | None) -> bool:
+    if not token:
+        return False
+    device = db.scalar(
+        select(TrustedTwoFactorDevice).where(
+            TrustedTwoFactorDevice.user_id == user_id,
+            TrustedTwoFactorDevice.token_digest == sha256_hex(token),
+        )
+    )
+    if not device:
+        return False
+    if as_utc(device.expires_at) <= utcnow():
+        db.delete(device)
+        return False
+    return True
+
+
+def revoke_trusted_devices(db: Session, user_id: str) -> None:
+    db.execute(delete(TrustedTwoFactorDevice).where(TrustedTwoFactorDevice.user_id == user_id))
 
 
 # --- Sign-in --------------------------------------------------------------------------------------

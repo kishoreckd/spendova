@@ -5,7 +5,7 @@ from datetime import datetime
 from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.model_helpers import created_at_column, updated_at_column
+from app.db.model_helpers import created_at_column, new_id, updated_at_column
 from app.db.session import Base
 
 
@@ -34,4 +34,17 @@ class TwoFactorChallenge(Base):
     code_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     attempts: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = created_at_column()
+
+
+class TrustedTwoFactorDevice(Base):
+    """Opaque remembered-browser credential, stored only as a digest."""
+
+    __tablename__ = "trusted_two_factor_devices"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(128), ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    token_digest: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    user_agent: Mapped[str | None] = mapped_column(String(512))
     created_at: Mapped[datetime] = created_at_column()

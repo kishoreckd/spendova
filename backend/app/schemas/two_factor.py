@@ -49,6 +49,7 @@ class TwoFactorLoginRequest(RequestModel):
     challenge_token: str = Field(min_length=20, max_length=200)
     method: SignInMethod
     code: str = Field(min_length=6, max_length=20)
+    trust_device: bool = False
 
 
 class TwoFactorResendRequest(RequestModel):

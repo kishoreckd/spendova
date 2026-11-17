@@ -9,7 +9,11 @@ import { FormAlert } from "@/components/common/form-field";
 import type { ShellContext } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@/components/ui/input-group";
 import { useCategories } from "@/features/categories/hooks";
 import { useMoney } from "@/hooks/use-money";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
@@ -47,20 +51,21 @@ export default function TransactionsPage() {
       : "";
   return (
     <div className="space-y-4">
-      <div className="relative">
-        <Search className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
+      <InputGroup>
+        <InputGroupInput
           type="search"
           value={query}
           onChange={(event) => {
             setQuery(event.target.value);
             setPage(0);
           }}
-          className="pl-10"
           placeholder="Search all transactions"
           aria-label="Search transactions"
         />
-      </div>
+        <InputGroupAddon align="inline-start">
+          <Search />
+        </InputGroupAddon>
+      </InputGroup>
       <TransactionFilterBar
         filters={filters}
         onChange={(next) => {

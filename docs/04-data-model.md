@@ -637,3 +637,10 @@ verification and revokes its sessions.
 each removed when used), created_at, updated_at. `two_factor_challenges`: id = SHA-256 of the
 sign-in challenge token, indexed user_id FK (cascade), code_digest and code_sent_at (email method),
 expires_at (10 minutes), attempts (max 5), created_at. One live challenge per user.
+
+## Trusted two-step devices — migration 20261117_0019
+
+`trusted_two_factor_devices`: UUID id, indexed user_id FK (cascade), unique indexed SHA-256
+token_digest, indexed expires_at, optional user_agent and created_at. Tokens are opaque, stored only
+in an HttpOnly SameSite cookie, expire after 30 days, and are revoked when two-step sign-in is
+disabled or the password is reset.

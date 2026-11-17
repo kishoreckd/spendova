@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     access_token_ttl_minutes: int = Field(default=15, ge=1, le=60)
     refresh_token_ttl_days: int = Field(default=30, ge=1, le=90)
     refresh_cookie_name: str = "spendova_refresh"
+    trusted_device_ttl_days: int = Field(default=30, ge=1, le=90)
+    trusted_device_cookie_name: str = "spendova_trusted_device"
     enable_api_docs: bool = False
     swagger_username: str | None = None
     swagger_password: str | None = Field(default=None, repr=False)

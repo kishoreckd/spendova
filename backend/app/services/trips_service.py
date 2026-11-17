@@ -60,12 +60,11 @@ def _replace_equal_shares(expense: TripExpense, participant_ids: list[str]) -> N
 def add_participant(db: Session, user_id: str, trip_id: str, payload: ParticipantCreate) -> Trip:
     trip = get_trip(db, user_id, trip_id)
     _assert_open(trip)
-    if trip.mode != "split":
-        raise AppError.bad_request("Change the trip to split before adding participants")
     if len(trip.participants) >= 20:
         raise AppError.bad_request("A trip can have up to 20 participants")
     if any(item.name.casefold() == payload.name.casefold() for item in trip.participants):
         raise AppError.bad_request("Participant name already exists")
+    trip.mode = "split"
     trip.participants.append(TripParticipant(name=payload.name))
     db.flush()
     all_ids = [participant.id for participant in trip.participants]

@@ -4,8 +4,8 @@ import { FormAlert } from "@/components/common/form-field";
 import { LoadingScreen } from "@/components/common/loading-screen";
 import type { ShellContext } from "@/components/layout/app-shell";
 import { CurrencyPicker } from "@/components/common/currency-picker";
+import { MonthPicker } from "@/components/common/month-picker";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -103,17 +103,14 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-5">
-      <div className="grid gap-3 rounded-xl border bg-card p-3 min-[480px]:grid-cols-2 sm:flex sm:justify-end">
+      <div className="grid w-full gap-3 rounded-xl border bg-card p-3 min-[480px]:grid-cols-2 sm:w-fit sm:grid-cols-[220px_280px]">
         <label className="space-y-1 text-xs font-medium text-muted-foreground">
           Month
-          <Input
-            type="month"
+          <MonthPicker
+            id="dashboard-month"
             value={month}
             max={localDateISO().slice(0, 7)}
-            onChange={(event) =>
-              event.target.value && setMonth(event.target.value)
-            }
-            className="min-w-44 text-foreground"
+            onChange={setMonth}
           />
         </label>
         <label className="space-y-1 text-xs font-medium text-muted-foreground">

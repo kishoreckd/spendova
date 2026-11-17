@@ -59,6 +59,19 @@ def set_refresh_cookie(response: Response, token: str) -> None:
     )
 
 
+def set_trusted_device_cookie(response: Response, token: str) -> None:
+    settings = get_settings()
+    response.set_cookie(
+        settings.trusted_device_cookie_name,
+        token,
+        max_age=settings.trusted_device_ttl_days * 86400,
+        path=COOKIE_PATH,
+        httponly=True,
+        secure=settings.is_production,
+        samesite="strict",
+    )
+
+
 def login_result(
     db: DbSession, request: Request, response: Response, background: BackgroundTasks, user, send_code: bool = False
 ) -> LoginResponse:
@@ -110,6 +123,12 @@ def login(payload: LoginRequest, request: Request, response: Response, backgroun
         raise
     two_factor = two_factor_service.enabled_for(db, user.id)
     if two_factor:
+        trusted = request.cookies.get(get_settings().trusted_device_cookie_name)
+        if two_factor_service.is_trusted_device(db, user.id, trusted):
+            result = login_result(db, request, response, background, user)
+            record(db, request, AuditAction.USER_LOGIN, user_id=user.id, details={"trusted_device": True})
+            db.commit()
+            return result
         # No session or cookie until the second step succeeds.
         challenge = two_factor_service.start_challenge(db, background, user, two_factor)
         db.commit()
@@ -134,6 +153,9 @@ def login_two_factor(
         db.commit()  # Keep the attempt count.
         raise AppError.bad_request("That code isn't right. Try again.")
     result = login_result(db, request, response, background, user)
+    if payload.trust_device:
+        token = two_factor_service.trust_device(db, user.id, request.headers.get("user-agent"))
+        set_trusted_device_cookie(response, token)
     record(db, request, AuditAction.USER_LOGIN, user_id=user.id, details={"two_factor": payload.method})
     db.commit()
     return result

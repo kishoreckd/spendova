@@ -50,11 +50,11 @@ export type TripCreate = {
   destination?: string | null;
   start_on?: string | null;
   end_on?: string | null;
-  mode: TripMode;
+  mode?: TripMode;
   currency: string;
   budget?: string | null;
   notes?: string | null;
-  participants: string[];
+  participants?: string[];
 };
 export type TripExpenseCreate = {
   description: string;

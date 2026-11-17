@@ -25,10 +25,16 @@ export const authApi = {
     challengeToken: string,
     method: SignInMethod,
     code: string,
+    trustDevice: boolean,
   ) =>
     apiFetch<LoginResponse>("/auth/login/2fa", {
       method: "POST",
-      body: { challenge_token: challengeToken, method, code },
+      body: {
+        challenge_token: challengeToken,
+        method,
+        code,
+        trust_device: trustDevice,
+      },
       skipRefresh: true,
     }),
   resendTwoFactorCode: (challengeToken: string) =>

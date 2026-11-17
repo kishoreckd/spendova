@@ -1,5 +1,5 @@
 import type { TransactionFilters } from "@/api/transactions/types";
-import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/common/date-picker";
 import { Field } from "@/components/common/form-field";
 import { Button } from "@/components/ui/button";
 import { useAccounts } from "@/features/accounts/hooks";
@@ -63,23 +63,19 @@ export function TransactionFilterBar({
   return (
     <div className="grid grid-cols-2 gap-3 rounded-xl border bg-card p-3 sm:grid-cols-3 lg:grid-cols-4">
       <Field id="filter-from" label="From">
-        <Input
+        <DatePicker
           id="filter-from"
-          type="date"
-          aria-label="From date"
           value={filters.from ?? ""}
           max={filters.to}
-          onChange={(event) => set("from", event.target.value || undefined)}
+          onChange={(value) => set("from", value || undefined)}
         />
       </Field>
       <Field id="filter-to" label="To">
-        <Input
+        <DatePicker
           id="filter-to"
-          type="date"
-          aria-label="To date"
           value={filters.to ?? ""}
           min={filters.from}
-          onChange={(event) => set("to", event.target.value || undefined)}
+          onChange={(value) => set("to", value || undefined)}
         />
       </Field>
       <FilterSelect

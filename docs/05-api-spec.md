@@ -16,8 +16,8 @@ need a Spendova access token; data routes also need a verified email when auth i
 | GET / PATCH | `/auth/me` | Read or update profile (currency, locale, time zone, onboarding) |
 | POST | `/auth/verification/send` | Email a 6-digit verification code (rate limited) |
 | POST | `/auth/verification/confirm` | Confirm the code, marks the email verified |
-| POST | `/auth/login` | Session, or `{two_factor_required, challenge_token, method}` when two-step sign-in is on (no cookie yet) |
-| POST | `/auth/login/2fa` | `{challenge_token, method: totp\|email\|recovery, code}` → session; 5 attempts per challenge |
+| POST | `/auth/login` | Session, or a two-step challenge; a valid trusted-device cookie skips the challenge |
+| POST | `/auth/login/2fa` | `{challenge_token, method, code, trust_device?}` to session; optional trusted device lasts 30 days |
 | POST | `/auth/login/2fa/resend` | Re-send the emailed sign-in code (1/minute) |
 | GET | `/auth/2fa` | `{enabled, method, recovery_codes_left}` |
 | POST | `/auth/2fa/totp/setup` | `{secret, otpauth_uri}` for the authenticator QR code |
@@ -80,7 +80,7 @@ and/or EMI. With only the EMI, the effective annual rate is solved for and
 |---|---|---|
 | GET / POST | `/trips` | List or create personal/family and split trips |
 | GET | `/trips/{id}` | Trip expenses, participants, allocations and balances |
-| POST | `/trips/{id}/participants` | Add a traveller and rebalance equal splits |
+| POST | `/trips/{id}/participants` | Add a traveller; the first addition converts a personal trip to split and rebalances only existing equal splits |
 | POST | `/trips/{id}/expenses` | Add an expense with payer and equal/custom/personal allocation |
 | DELETE | `/trips/{id}/expenses/{expenseId}` | Remove an expense from an open trip |
 | POST | `/trips/{id}/close` | Close and post only the user's shares; requires `Idempotency-Key` |

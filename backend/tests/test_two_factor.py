@@ -122,3 +122,40 @@ def test_attempt_limit_and_disable_requires_password(api, mailbox, monkeypatch):
     assert api.post(f"{API}/auth/2fa/disable", headers=headers, json={"password": "wrong"}).status_code == 400
     assert api.post(f"{API}/auth/2fa/disable", headers=headers, json={"password": PASSWORD}).status_code == 204
     assert "access_token" in login(api)
+
+
+def test_trusted_device_skips_challenge_and_is_revoked_on_disable(api, mailbox, monkeypatch):
+    _, headers = register(api, monkeypatch)
+    setup = data(api.post(f"{API}/auth/2fa/totp/setup", headers=headers, json={"password": PASSWORD}))
+    now = time.time()
+    api.post(
+        f"{API}/auth/2fa/totp/enable",
+        headers=headers,
+        json={"code": totp.code_at(setup["secret"], int(now // 30) - 1)},
+    )
+
+    challenge = login(api)
+    signed = api.post(
+        f"{API}/auth/login/2fa",
+        json={
+            "challenge_token": challenge["challenge_token"],
+            "method": "totp",
+            "code": totp.code_at(setup["secret"], int(now // 30)),
+            "trust_device": True,
+        },
+    )
+    assert signed.status_code == 200
+    assert "spendova_trusted_device" in signed.cookies
+    assert "access_token" in login(api)
+
+    assert api.post(f"{API}/auth/2fa/disable", headers=headers, json={"password": PASSWORD}).status_code == 204
+    second_setup = data(api.post(f"{API}/auth/2fa/totp/setup", headers=headers, json={"password": PASSWORD}))
+    assert (
+        api.post(
+            f"{API}/auth/2fa/totp/enable",
+            headers=headers,
+            json={"code": totp.code_at(second_setup["secret"], int(time.time() // 30))},
+        ).status_code
+        == 200
+    )
+    assert login(api)["two_factor_required"] is True

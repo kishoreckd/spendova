@@ -97,46 +97,53 @@ export default function TripsPage() {
               <TabsTrigger value="closed">Closed</TabsTrigger>
             </TabsList>
           </Tabs>
-          <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
-            <div className="space-y-2">
-              {visible.map((trip) => (
-                <button
-                  key={trip.id}
-                  onClick={() => setSelectedId(trip.id)}
-                  className={`w-full rounded-xl border p-4 text-left transition ${selected?.id === trip.id ? "border-primary bg-primary/5" : "bg-card hover:bg-muted/50"}`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="font-medium">{trip.name}</span>
-                    <Badge variant="outline">
-                      {trip.mode === "split"
-                        ? `${trip.participants.length} people`
-                        : "Personal"}
-                    </Badge>
-                  </div>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    {trip.destination || "No destination"}
-                  </p>
-                  <p className="mt-2 font-semibold tabular-nums">
-                    {money.format(trip.user_share)}
-                  </p>
-                </button>
-              ))}
+          {!visible.length ? (
+            <Card className="border-dashed">
+              <CardContent className="flex min-h-48 items-center justify-center text-sm text-muted-foreground">
+                No {view} trips
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid min-w-0 gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
+              <div className="grid gap-2 sm:grid-cols-2 xl:block xl:space-y-2">
+                {visible.map((trip) => (
+                  <button
+                    key={trip.id}
+                    onClick={() => setSelectedId(trip.id)}
+                    className={`w-full rounded-xl border p-4 text-left transition ${selected?.id === trip.id ? "border-primary bg-primary/5" : "bg-card hover:bg-muted/50"}`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="font-medium">{trip.name}</span>
+                      <Badge variant="outline">
+                        {trip.participants.length}{" "}
+                        {trip.participants.length === 1 ? "person" : "people"}
+                      </Badge>
+                    </div>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      {trip.destination || "No destination"}
+                    </p>
+                    <p className="mt-2 font-semibold tabular-nums">
+                      {money.format(trip.user_share)}
+                    </p>
+                  </button>
+                ))}
+              </div>
+              {selected && (
+                <TripDetail
+                  trip={selected}
+                  money={money}
+                  participant={participant}
+                  setParticipant={setParticipant}
+                  participantError={participantError}
+                  addPerson={addPerson}
+                  addingPerson={addParticipant.isPending}
+                  onExpense={() => setExpenseOpen(true)}
+                  onClose={() => setCloseOpen(true)}
+                  onDeleteExpense={setExpenseToDelete}
+                />
+              )}
             </div>
-            {selected && (
-              <TripDetail
-                trip={selected}
-                money={money}
-                participant={participant}
-                setParticipant={setParticipant}
-                participantError={participantError}
-                addPerson={addPerson}
-                addingPerson={addParticipant.isPending}
-                onExpense={() => setExpenseOpen(true)}
-                onClose={() => setCloseOpen(true)}
-                onDeleteExpense={setExpenseToDelete}
-              />
-            )}
-          </div>
+          )}
         </>
       )}
       <CreateTripDialog open={createOpen} onOpenChange={setCreateOpen} />
@@ -211,7 +218,7 @@ function TripDetail({
   return (
     <div className="min-w-0 space-y-4">
       <Card>
-        <CardHeader className="flex-row items-start justify-between gap-3">
+        <CardHeader className="gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <CardTitle>{trip.name}</CardTitle>
             <div className="mt-2 flex flex-wrap gap-3 text-sm text-muted-foreground">
@@ -230,7 +237,7 @@ function TripDetail({
             </div>
           </div>
           {trip.status !== "closed" && (
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button variant="outline" onClick={onExpense}>
                 <Plus /> Expense
               </Button>
@@ -281,58 +288,60 @@ function TripDetail({
           </CardContent>
         </Card>
       )}
-      {trip.mode === "split" && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Users className="size-4" /> Travellers
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {trip.status !== "closed" && (
-              <div className="flex gap-2">
-                <Field
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Users className="size-4" /> People
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {trip.status !== "closed" && (
+            <div className="grid items-end gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+              <Field
+                id="trip-new-person"
+                label="Add traveller"
+                error={participantError}
+              >
+                <Input
                   id="trip-new-person"
-                  label="Add traveller"
-                  error={participantError}
-                  className="flex-1"
-                >
-                  <Input
-                    id="trip-new-person"
-                    value={participant}
-                    onChange={(e) => setParticipant(e.target.value)}
-                  />
-                </Field>
-                <Button
-                  className="mt-7"
-                  variant="outline"
-                  loading={addingPerson}
-                  onClick={() => void addPerson()}
-                >
-                  Add
-                </Button>
-              </div>
-            )}
-            <div className="divide-y">
-              {trip.balances.map((balance) => (
-                <div
-                  key={balance.participant_id}
-                  className="flex items-center justify-between py-3 text-sm"
-                >
-                  <div>
-                    <p className="font-medium">
-                      {balance.name}
-                      {trip.participants.find(
-                        (p) => p.id === balance.participant_id,
-                      )?.is_user
-                        ? " (you)"
-                        : ""}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Paid {money.format(balance.paid)} · Share{" "}
-                      {money.format(balance.share)}
-                    </p>
-                  </div>
+                  value={participant}
+                  placeholder="Name"
+                  onChange={(e) => setParticipant(e.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") void addPerson();
+                  }}
+                />
+              </Field>
+              <Button
+                variant="outline"
+                loading={addingPerson}
+                onClick={() => void addPerson()}
+              >
+                <Plus /> Add person
+              </Button>
+            </div>
+          )}
+          <div className="divide-y">
+            {trip.balances.map((balance) => (
+              <div
+                key={balance.participant_id}
+                className="flex items-center justify-between py-3 text-sm"
+              >
+                <div>
+                  <p className="font-medium">
+                    {balance.name}
+                    {trip.participants.find(
+                      (p) => p.id === balance.participant_id,
+                    )?.is_user
+                      ? " (you)"
+                      : ""}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Paid {money.format(balance.paid)} · Share{" "}
+                    {money.format(balance.share)}
+                  </p>
+                </div>
+                {trip.participants.length > 1 && (
                   <span
                     className={
                       Number(balance.balance) >= 0
@@ -344,12 +353,12 @@ function TripDetail({
                       ? `Gets ${money.format(balance.balance)}`
                       : `Owes ${money.format(Math.abs(Number(balance.balance)))}`}
                   </span>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+                )}
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">

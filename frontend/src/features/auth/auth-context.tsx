@@ -41,6 +41,7 @@ type AuthContextValue = {
     challengeToken: string,
     method: SignInMethod,
     code: string,
+    trustDevice: boolean,
   ) => Promise<SpendovaUser>;
   signUpWithEmail: (
     name: string,
@@ -120,12 +121,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [acceptLogin],
   );
   const completeTwoFactor = useCallback(
-    async (challengeToken: string, method: SignInMethod, code: string) => {
+    async (
+      challengeToken: string,
+      method: SignInMethod,
+      code: string,
+      trustDevice: boolean,
+    ) => {
       const requestId = ++generation.current;
       const result = await authApi.completeTwoFactor(
         challengeToken,
         method,
         code,
+        trustDevice,
       );
       if (requestId !== generation.current)
         throw new Error("Sign-in changed. Please try again.");

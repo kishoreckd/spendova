@@ -1,3 +1,4 @@
+/* oxlint-disable react/set-state-in-effect -- dialog opening intentionally resets its draft */
 import { useEffect, useMemo, useState } from "react";
 import type { Trip } from "@/api/trips/types";
 import { DatePicker } from "@/components/common/date-picker";
@@ -102,7 +103,7 @@ export function ExpenseDialog({
   }
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="gap-0 p-0 sm:max-w-xl max-sm:top-0 max-sm:left-0 max-sm:h-dvh max-sm:max-h-dvh max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none">
+      <DialogContent className="grid max-h-[calc(100dvh-1rem)] grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden p-0 sm:max-w-xl max-sm:top-0 max-sm:left-0 max-sm:h-dvh max-sm:max-h-dvh max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none">
         <DialogHeader className="px-4 pt-4 pb-2 sm:px-6">
           <DialogTitle>Add trip expense</DialogTitle>
           <DialogDescription className="sr-only">
@@ -112,7 +113,7 @@ export function ExpenseDialog({
         <form
           noValidate
           onSubmit={submit}
-          className="flex min-h-0 flex-1 flex-col"
+          className="grid min-h-0 grid-rows-[minmax(0,1fr)_auto]"
         >
           <div className="space-y-4 overflow-y-auto px-4 py-3 sm:px-6">
             <FormAlert>{error}</FormAlert>
@@ -238,7 +239,7 @@ export function ExpenseDialog({
               />
             </Field>
           </div>
-          <DialogFooter className="sticky bottom-0 mt-auto border-t bg-background p-4 sm:px-6">
+          <DialogFooter className="border-t bg-background p-4 sm:px-6">
             <Button
               type="button"
               variant="outline"

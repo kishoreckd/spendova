@@ -111,3 +111,41 @@ def test_trip_rejects_cross_user_access_and_invalid_custom_split(api):
         },
     )
     assert response.status_code == 400
+
+
+def test_adding_first_traveller_converts_personal_trip_without_resplitting_old_expenses(api):
+    headers = sign_up(api, "trip-convert", name="Kiran")
+    category = category_named(api, headers, "Transport")
+    trip = data(
+        api.post(
+            f"{API}/trips",
+            headers=headers,
+            json={"name": "Weekend", "mode": "personal", "currency": "INR"},
+        )
+    )
+    owner = trip["participants"][0]
+    trip = data(
+        api.post(
+            f"{API}/trips/{trip['id']}/expenses",
+            headers=headers,
+            json={
+                "description": "Train",
+                "category": "Transport",
+                "category_id": category["id"],
+                "amount": "120.00",
+                "payer_participant_id": owner["id"],
+                "split_mode": "personal",
+            },
+        )
+    )
+    converted = data(
+        api.post(
+            f"{API}/trips/{trip['id']}/participants",
+            headers=headers,
+            json={"name": "Meera"},
+        )
+    )
+    assert converted["mode"] == "split"
+    assert len(converted["participants"]) == 2
+    assert converted["user_share"] == "120.0000"
+    assert converted["expenses"][0]["split_mode"] == "personal"

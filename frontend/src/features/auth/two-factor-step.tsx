@@ -8,6 +8,7 @@ import type {
 } from "@/api/auth/types";
 import { Field } from "@/components/common/form-field";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/features/auth/auth-context";
 import { controlProps, notifyError, notifySuccess } from "@/lib/forms";
@@ -35,6 +36,7 @@ export function TwoFactorStep({
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [resending, setResending] = useState(false);
+  const [trustDevice, setTrustDevice] = useState(true);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -57,7 +59,14 @@ export function TwoFactorStep({
     setSaving(true);
     setError("");
     try {
-      onDone(await completeTwoFactor(challenge.challenge_token, method, code));
+      onDone(
+        await completeTwoFactor(
+          challenge.challenge_token,
+          method,
+          code,
+          trustDevice,
+        ),
+      );
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Could not sign in");
     } finally {
@@ -81,13 +90,13 @@ export function TwoFactorStep({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {developmentCode && method === "email" && (
         <div className="rounded-xl bg-amber-500/10 p-3 text-sm">
           <strong>Development code:</strong> {developmentCode}
         </div>
       )}
-      <form noValidate className="space-y-4" onSubmit={submit}>
+      <form noValidate className="space-y-5" onSubmit={submit}>
         <Field id="code" label={LABELS[method]} error={error}>
           <Input
             {...controlProps("code", error)}
@@ -99,18 +108,22 @@ export function TwoFactorStep({
             autoFocus
             placeholder={method === "recovery" ? "xxxxx-xxxxx" : "000000"}
             onChange={() => setError("")}
-            className="h-12 rounded-xl text-center font-mono text-xl tracking-[0.3em] sm:h-12"
+            className="h-16 rounded-2xl text-center font-mono text-xl tracking-[0.35em] sm:h-16"
           />
         </Field>
+        <label className="flex cursor-pointer items-center gap-3 rounded-xl px-1 text-sm font-medium">
+          <Checkbox checked={trustDevice} onCheckedChange={setTrustDevice} />
+          Trust this device for 30 days
+        </label>
         <Button
           type="submit"
-          className="h-11 w-full rounded-xl sm:h-11"
+          className="h-14 w-full rounded-2xl text-base sm:h-14"
           loading={saving}
         >
           {saving ? "Checking…" : "Continue"}
         </Button>
       </form>
-      <div className="flex flex-wrap justify-between gap-1">
+      <div className="flex items-center justify-between gap-3 pt-1">
         <Button variant="ghost" className="rounded-xl" onClick={onCancel}>
           Back
         </Button>
